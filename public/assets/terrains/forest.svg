@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="forestBg" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#2d6a4f"/>
+      <stop offset="70%" stop-color="#1b4332"/>
+      <stop offset="100%" stop-color="#081c15"/>
+    </radialGradient>
+    <linearGradient id="treeGrad1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#52b788"/>
+      <stop offset="100%" stop-color="#2d6a4f"/>
+    </linearGradient>
+    <linearGradient id="treeGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#74c69d"/>
+      <stop offset="100%" stop-color="#40916c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="300" height="300" fill="url(#forestBg)"/>
+
+  <!-- Subtle Canopy Pattern -->
+  <circle cx="60" cy="80" r="45" fill="#2d6a4f" opacity="0.3"/>
+  <circle cx="230" cy="70" r="40" fill="#2d6a4f" opacity="0.3"/>
+  <circle cx="150" cy="220" r="50" fill="#1b4332" opacity="0.5"/>
+
+  <!-- Trunks -->
+  <rect x="144" y="170" width="12" height="30" fill="#582f0e" rx="2"/>
+  <rect x="94" y="200" width="10" height="25" fill="#582f0e" rx="2"/>
+  <rect x="196" y="195" width="10" height="25" fill="#582f0e" rx="2"/>
+
+  <!-- Left Pine Tree -->
+  <g transform="translate(10, 30)">
+    <polygon points="90,130 65,175 115,175" fill="url(#treeGrad1)"/>
+    <polygon points="90,105 70,145 110,145" fill="url(#treeGrad2)"/>
+    <polygon points="90,80 75,115 105,115" fill="#95d5b2"/>
+  </g>
+
+  <!-- Right Pine Tree -->
+  <g transform="translate(110, 25)">
+    <polygon points="90,130 65,175 115,175" fill="url(#treeGrad1)"/>
+    <polygon points="90,105 70,145 110,145" fill="url(#treeGrad2)"/>
+    <polygon points="90,80 75,115 105,115" fill="#95d5b2"/>
+  </g>
+
+  <!-- Center Main Pine Tree -->
+  <g transform="translate(60, -5)">
+    <polygon points="90,115 55,170 125,170" fill="url(#treeGrad1)"/>
+    <polygon points="90,85 62,135 118,135" fill="url(#treeGrad2)"/>
+    <polygon points="90,55 70,100 110,100" fill="#b7e4c7"/>
+  </g>
+
+  <!-- Foreground details -->
+  <circle cx="130" cy="210" r="4" fill="#95d5b2" opacity="0.6"/>
+  <circle cx="170" cy="215" r="3" fill="#95d5b2" opacity="0.6"/>
+  <path d="M 80 230 Q 150 250 220 230" stroke="#40916c" stroke-width="2" fill="none" opacity="0.4"/>
+</svg>

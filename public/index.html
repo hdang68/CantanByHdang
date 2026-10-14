@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catan Classic Online - Multiplayer</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Header (Chỉ hiển thị đầy đủ ở sảnh chờ, chuyển thành thanh nổi khi vào ván) -->
+    <header id="mainAppHeader" class="app-header">
+      <div class="brand">
+        <h1 class="brand-title">CATAN CLASSIC</h1>
+        <span class="brand-badge">ONLINE</span>
+      </div>
+
+      <div class="nav-controls">
+        <button id="btnToggleBoardView" class="btn btn-secondary btn-sm">
+          🗺️ Bàn Cờ
+        </button>
+      </div>
+
+      <div class="connection-status-bar">
+        <div id="connectionPill" class="status-pill connecting">
+          <span class="status-dot"></span>
+          <span id="connectionText">Đang kết nối...</span>
+        </div>
+        <div id="latencyBadge" class="latency-badge" title="Độ trễ máy chủ">
+          <span id="latencyValue">--</span> ms
+        </div>
+        <button id="btnPing" class="btn btn-secondary btn-sm" title="Kiểm tra độ trễ mạng">
+          Ping
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="mainContainer" class="main-content">
+      <!-- Section: Sảnh chờ / Tạo phòng (Lobby - Ẩn khi ván đấu bắt đầu) -->
+      <section id="lobbySection" class="lobby-section card">
+        <div class="lobby-header">
+          <h2>SẢNH CHỜ TRÒ CHƠI</h2>
+          <p class="subtitle">Chơi Catan Classic trực tuyến cùng bạn bè qua trình duyệt web</p>
+        </div>
+
+        <!-- Trạng thái chưa vào phòng -->
+        <div id="joinCard" class="lobby-box">
+          <div class="form-group">
+            <label for="playerNameInput">Tên người chơi của bạn:</label>
+            <input type="text" id="playerNameInput" maxlength="20" placeholder="Ví dụ: Hoàng, Minh, Hùng..." autofocus>
+          </div>
+
+          <div class="lobby-actions-grid">
+            <!-- Box Tạo phòng -->
+            <div class="action-card">
+              <h3>Tạo phòng mới</h3>
+              <p>Trở thành chủ phòng và nhận mã phòng để mời bạn bè.</p>
+              <button id="btnCreateRoom" class="btn btn-primary btn-block">
+                Tạo phòng ngay
+              </button>
+            </div>
+
+            <div class="divider-text">HOẶC</div>
+
+            <!-- Box Vào phòng -->
+            <div class="action-card">
+              <h3>Vào phòng có sẵn</h3>
+              <p>Nhập mã phòng 5 ký tự mà bạn bè đã gửi cho bạn.</p>
+              <div class="input-with-button">
+                <input type="text" id="roomCodeInput" maxlength="5" placeholder="Mã phòng (VD: AB12C)">
+                <button id="btnJoinRoom" class="btn btn-accent">Vào phòng</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trạng thái ĐÃ VÀO PHÒNG -->
+        <div id="roomCard" class="lobby-box room-box hidden">
+          <div class="room-title-bar">
+            <div class="room-id-wrapper">
+              <span>MÃ PHÒNG:</span>
+              <strong id="displayRoomId" class="room-id-text">-----</strong>
+              <button id="btnCopyInvite" class="btn btn-outline btn-sm" title="Sao chép liên kết mời bạn">
+                📋 Sao chép link mời
+              </button>
+            </div>
+            <button id="btnLeaveRoom" class="btn btn-danger btn-sm">Rời phòng</button>
+          </div>
+
+          <div class="room-players-panel">
+            <h3>Danh sách người chơi (<span id="playerCount">0</span>/4)</h3>
+            <div id="playerList" class="player-slots-grid">
+              <!-- Rendered dynamic slots -->
+            </div>
+          </div>
+
+          <div class="room-controls">
+            <div id="waitingNote" class="waiting-note">
+              Cần ít nhất 2 người chơi để bắt đầu (khuyên dùng 3–4 người).
+            </div>
+            <button id="btnStartGame" class="btn btn-success btn-lg" disabled>
+              Bắt đầu trò chơi
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Bàn chơi Catan trải toàn màn hình (Game Table Board) -->
+      <section id="gameSection" class="game-section">
+        <!-- Thanh công cụ tùy chỉnh bản đồ (Chỉ hiện khi chưa vào ván) -->
+        <div class="board-header-bar pregame-only">
+          <div class="board-title-group">
+            <h2>BÀN CỜ CATAN CLASSIC</h2>
+            <span id="boardModeBadge" class="board-mode-badge">Bản đồ Tiêu chuẩn</span>
+          </div>
+
+          <div class="board-actions-toolbar">
+            <button id="btnLoadStandard" class="btn btn-secondary btn-sm" title="Nạp bản đồ sách luật Catan">
+              Bản đồ tiêu chuẩn
+            </button>
+            <button id="btnGenerateRandom" class="btn btn-accent btn-sm" title="Sinh bản đồ ngẫu nhiên mới">
+              🎲 Sinh ngẫu nhiên
+            </button>
+            <button id="btnCycleColor" class="btn btn-outline btn-sm" title="Đổi màu quân thử nghiệm">
+              <span id="currentColorDot" class="color-dot-indicator"></span> Đổi màu thử
+            </button>
+            <button id="btnClearPieces" class="btn btn-danger btn-sm" title="Xóa toàn bộ quân cờ thử nghiệm">
+              Dọn bàn cờ
+            </button>
+          </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- BỐ CỤC BÀN CHƠI FULLSCREEN - CÁC TAB NỔI KÉO THẢ TỰ DO   -->
+        <!-- ======================================================== -->
+        <div id="inGameTableContainer" class="in-game-table-container">
+
+          <!-- 1. CỘT TRÁI: TAB CỐ ĐỊNH 4 NGƯỜI CHƠI (KHÔNG DI CHUYỂN) -->
+          <div id="hudPlayersWidget" class="hud-players-fixed-widget">
+            <!-- Danh sách 4 người chơi -->
+            <div id="hudOtherPlayersBar" class="hud-players-column">
+              <!-- Render danh sách 4 người chơi -->
+            </div>
+          </div>
+
+          <!-- 2. KHUNG THẺ VÀ TÀI NGUYÊN (TÚI THẺ - CÓ THỂ KÉO THẢ & THU GỌN / MỞ RỘNG) -->
+          <div id="viewerHandSection" class="hud-floating-tab viewer-hand-section">
+            <div class="hud-tab-header hand-header" id="handHeader">
+              <div class="hud-header-left">
+                <span class="hud-drag-handle" title="Kéo để di chuyển tab này">⠿</span>
+                <span class="hand-title">🎴 TÚI THẺ CỦA BẠN</span>
+                <span id="handCardsSummaryBadge" class="hand-summary-badge hidden">0 thẻ</span>
+              </div>
+              <div class="hand-controls">
+                <button id="btnToggleHandCollapse" class="btn-toggle-hand" title="Thu gọn / Mở rộng túi thẻ">
+                  <span id="handToggleIcon">▼</span>
+                  <span id="handToggleLabel" class="toggle-label">Thu gọn</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Thân túi thẻ (Có thể thu gọn / mở rộng) -->
+            <div id="handBodyContainer" class="hand-body-container">
+              <!-- Thẻ tài nguyên có thể kéo thả -->
+              <div id="resourceCardsGrid" class="resource-cards-grid">
+                <div class="res-card-item wood" data-res="wood" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">🌲</div>
+                  <div class="card-name">Gỗ</div>
+                  <div class="card-count" id="resWoodCount">0</div>
+                </div>
+                <div class="res-card-item clay" data-res="clay" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">🧱</div>
+                  <div class="card-name">Sét</div>
+                  <div class="card-count" id="resClayCount">0</div>
+                </div>
+                <div class="res-card-item sheep" data-res="sheep" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">🐑</div>
+                  <div class="card-name">Cừu</div>
+                  <div class="card-count" id="resSheepCount">0</div>
+                </div>
+                <div class="res-card-item wheat" data-res="wheat" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">🌾</div>
+                  <div class="card-name">Mì</div>
+                  <div class="card-count" id="resWheatCount">0</div>
+                </div>
+                <div class="res-card-item ore" data-res="ore" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">⛰️</div>
+                  <div class="card-name">Quặng</div>
+                  <div class="card-count" id="resOreCount">0</div>
+                </div>
+              </div>
+
+              <!-- Thẻ phát triển trong tay (Kéo thả ra bàn để đánh thẻ) -->
+              <div class="hand-dev-section">
+                <div class="dev-header">
+                  <span>🃏 THẺ PHÁT TRIỂN (<strong id="myDevCardsBadge">0</strong>)</span>
+                  <button id="btnOpenDevCards" class="btn btn-outline btn-xs">Chi tiết</button>
+                </div>
+                <div id="handDevCardsList" class="hand-dev-cards-list">
+                  <!-- Render dev cards có thể kéo thả -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. KHUNG GIỮA: BẢN ĐỒ THU PHÓNG & THANH KÉO QUÂN CỜ (CENTER STAGE) -->
+          <main id="inGameCenterStage" class="in-game-center-stage">
+            <!-- Nút điều khiển Thu phóng bàn cờ (Zoom Toolbar nổi) -->
+            <div class="board-zoom-toolbar" title="Thu phóng bản đồ">
+              <button id="btnZoomIn" class="btn-board-zoom" title="Phóng to bản đồ">+</button>
+              <button id="btnZoomOut" class="btn-board-zoom" title="Thu nhỏ bản đồ">-</button>
+              <button id="btnZoomReset" class="btn-board-zoom" title="Đặt lại góc nhìn mặc định">🔄</button>
+            </div>
+
+            <!-- Khung chứa SVG bàn cờ có thể kéo thả & lăn chuột thu phóng -->
+            <div id="svgBoardContainer" class="svg-board-container">
+              <!-- SvgBoardRenderer chèn thẻ <svg> vào đây -->
+            </div>
+
+            <!-- Khay Kéo Quân Cờ và Thao tác nhanh (Có thể kéo thả di chuyển) -->
+            <div id="buildingDock" class="hud-floating-tab building-dock">
+              <span class="hud-drag-handle dock-drag-handle" title="Kéo để di chuyển khay quân cờ">⠿</span>
+              <div class="dock-tokens-group">
+                <div class="dock-token-item" id="dragTokenSettlement" draggable="true" title="Kéo thả vào một Đỉnh trống trên bàn để xây Khu định cư!">
+                  <div class="token-icon">🏠</div>
+                  <div class="token-label">Khu định cư</div>
+                  <span class="token-cost" id="costSettlement">🌲 🧱 🐑 🌾</span>
+                  <span class="token-stock" id="stockSettlements">5</span>
+                  <span class="token-free-pill hidden" id="pillFreeSettlement">FREE</span>
+                </div>
+                <div class="dock-token-item" id="dragTokenCity" draggable="true" title="Kéo thả vào Khu định cư của bạn để nâng cấp Thành phố!">
+                  <div class="token-icon">🏙️</div>
+                  <div class="token-label">Thành phố</div>
+                  <span class="token-cost" id="costCity">🌾🌾 ⛰️⛰️⛰️</span>
+                  <span class="token-stock" id="stockCities">4</span>
+                </div>
+                <div class="dock-token-item" id="dragTokenRoad" draggable="true" title="Kéo thả vào một Cạnh trống kề mạng lưới để đặt Đường!">
+                  <div class="token-icon">➖</div>
+                  <div class="token-label">Đường</div>
+                  <span class="token-cost" id="costRoad">🌲 🧱</span>
+                  <span class="token-stock" id="stockRoads">15</span>
+                  <span class="token-free-pill hidden" id="pillFreeRoad">FREE</span>
+                </div>
+                <div class="dock-token-item" id="dragTokenDevCard" draggable="true" title="Kéo thả vào Túi thẻ của bạn để mua Thẻ phát triển!">
+                  <div class="token-icon">🃏</div>
+                  <div class="token-label">Thẻ bài</div>
+                  <span class="token-cost" id="costDevCard">🐑 🌾 ⛰️</span>
+                  <span class="token-stock" id="stockDevCards">25</span>
+                </div>
+              </div>
+
+              <div class="dock-actions-group">
+                <button id="btnEndTurn" class="btn btn-danger btn-dock btn-end-turn" disabled title="Kết thúc lượt của bạn">
+                  ⏭️ Hết lượt
+                </button>
+              </div>
+            </div>
+          </main>
+
+          <!-- 3. CỘT PHẢI: XÚC XẮC VÀ NGÂN HÀNG CATAN (RIGHT PANEL) -->
+          <aside id="inGameRightPanel" class="in-game-right-panel">
+            <!-- Widget Xúc xắc 3D (Có thể kéo thả di chuyển) -->
+            <div id="hudDiceWidget" class="hud-floating-tab hud-dice-widget">
+              <div class="hud-tab-header">
+                <div class="hud-header-left">
+                  <span class="hud-drag-handle" title="Kéo để di chuyển tab này">⠿</span>
+                  <span class="dice-title">XÚC XẮC CATAN</span>
+                </div>
+              </div>
+              <div id="diceVisual" class="dice-visual">
+                <span id="die1" class="die-face">-</span>
+                <span id="die2" class="die-face">-</span>
+              </div>
+              <button id="btnRollDice" class="btn btn-primary btn-block btn-roll-dice" disabled>
+                🎲 Gieo xúc xắc
+              </button>
+              <button id="btnRollDiceFloating" class="hidden"></button>
+            </div>
+
+            <!-- Widget Ngân hàng Catan (Có thể kéo thả di chuyển) -->
+            <div id="hudBankWidget" class="hud-floating-tab hud-bank-widget" title="Thả thẻ tài nguyên vào đây để thực hiện đổi qua Ngân hàng!">
+              <div class="hud-tab-header">
+                <div class="hud-header-left">
+                  <span class="hud-drag-handle" title="Kéo để di chuyển tab này">⠿</span>
+                  <span class="bank-title">🏛️ NGÂN HÀNG CATAN</span>
+                </div>
+              </div>
+
+              <div class="bank-stacks-grid">
+                <div class="bank-stack-item wood" data-res="wood">
+                  <div class="stack-icon">🌲</div>
+                  <div class="stack-info">
+                    <span class="stack-name">Gỗ</span>
+                    <strong class="stack-qty" id="bankStockWood">19</strong>/19
+                  </div>
+                </div>
+                <div class="bank-stack-item clay" data-res="clay">
+                  <div class="stack-icon">🧱</div>
+                  <div class="stack-info">
+                    <span class="stack-name">Đất sét</span>
+                    <strong class="stack-qty" id="bankStockClay">19</strong>/19
+                  </div>
+                </div>
+                <div class="bank-stack-item sheep" data-res="sheep">
+                  <div class="stack-icon">🐑</div>
+                  <div class="stack-info">
+                    <span class="stack-name">Cừu</span>
+                    <strong class="stack-qty" id="bankStockSheep">19</strong>/19
+                  </div>
+                </div>
+                <div class="bank-stack-item wheat" data-res="wheat">
+                  <div class="stack-icon">🌾</div>
+                  <div class="stack-info">
+                    <span class="stack-name">Lúa mì</span>
+                    <strong class="stack-qty" id="bankStockWheat">19</strong>/19
+                  </div>
+                </div>
+                <div class="bank-stack-item ore" data-res="ore">
+                  <div class="stack-icon">⛰️</div>
+                  <div class="stack-info">
+                    <span class="stack-name">Quặng</span>
+                    <strong class="stack-qty" id="bankStockOre">19</strong>/19
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Khung chứa các phần tử phụ tương thích code cũ -->
+        <div id="gameHudSection" class="hidden">
+          <span id="playerVpCount" class="hidden">0</span>
+          <span id="hudActivePlayerBadge" class="hidden"></span>
+          <span id="hudPhaseBadge" class="hidden"></span>
+          <span id="bankDevCardsRemaining" class="hidden">25</span>
+        </div>
+
+        <!-- Khung chứa hạt tài nguyên bay qua lại trên màn hình -->
+        <div id="flyingParticlesContainer" class="flying-particles-container"></div>
+
+        <!-- Khung Nhật ký sự kiện nổi (Có thể kéo thả di chuyển & Thu gọn / Mở rộng) -->
+        <section id="floatingLogDrawer" class="hud-floating-tab floating-log-drawer">
+          <div class="log-header" id="logHeader">
+            <div class="hud-header-left">
+              <span class="hud-drag-handle" title="Kéo để di chuyển tab này">⠿</span>
+              <span class="log-title">📜 NHẬT KÝ</span>
+            </div>
+            <div class="log-controls">
+              <button id="btnToggleLogDrawer" class="btn-toggle-log" title="Thu gọn / Mở rộng nhật ký">
+                <span id="logToggleIcon">▼</span>
+                <span id="logToggleLabel" class="toggle-label">Thu gọn</span>
+              </button>
+              <button id="btnClearLog" class="btn btn-text btn-xs" title="Xóa nhật ký">✕</button>
+            </div>
+          </div>
+          <div id="logContainer" class="log-container">
+            <div class="log-item system">
+              <span class="log-time">00:00:00</span>
+              <span class="log-msg">Khởi tạo ứng dụng client...</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <!-- ======================================================== -->
+    <!-- MODALS TRỰC QUAN TRÊN BÀN CHƠI (INTERACTIVE GAME MODALS) -->
+    <!-- ======================================================== -->
+
+    <!-- Modal 1A: Giao dịch Ngân hàng Catan (Dedicated 4:1 Bank Trade Modal - Tối giản) -->
+    <div id="modalBankTrade" class="modal-backdrop hidden">
+      <div class="modal-card minimal-trade-modal">
+        <div class="modal-header">
+          <h3>🏛️ ĐỔI VỚI NGÂN HÀNG (4 : 1)</h3>
+          <button id="btnCloseBankTradeModal" class="btn-close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="minimal-trade-row">
+            <!-- Cột Bạn đưa ra (4 thẻ) -->
+            <div class="trade-box give-box">
+              <span class="trade-box-badge">BẠN ĐƯA (4)</span>
+              <select id="bankTradeGiveSelect" class="form-select minimal-select">
+                <option value="wood">🌲 Gỗ</option>
+                <option value="clay">🧱 Đất sét</option>
+                <option value="sheep">🐑 Cừu</option>
+                <option value="wheat">🌾 Lúa mì</option>
+                <option value="ore">⛰️ Quặng</option>
+              </select>
+              <span id="bankTradeGiveStock" class="trade-mini-stock">Bạn có: 0</span>
+            </div>
+
+            <!-- Mũi tên chuyển đổi -->
+            <div class="trade-arrow-circle">➔</div>
+
+            <!-- Cột Bạn nhận về (1 thẻ) -->
+            <div class="trade-box get-box">
+              <span class="trade-box-badge">BẠN NHẬN (1)</span>
+              <select id="bankTradeGetSelect" class="form-select minimal-select">
+                <option value="clay">🧱 Đất sét</option>
+                <option value="wood">🌲 Gỗ</option>
+                <option value="sheep">🐑 Cừu</option>
+                <option value="wheat">🌾 Lúa mì</option>
+                <option value="ore">⛰️ Quặng</option>
+              </select>
+              <span id="bankTradeGetStock" class="trade-mini-stock">Kho còn: 19</span>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button id="btnExecuteBankTrade" class="btn btn-primary btn-block btn-minimal-trade">Đổi 4 lấy 1 với Ngân hàng</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 1B: Giao dịch Cảng Biển (Dedicated Port Trade Modal - 2:1 hoặc 3:1 - Tối giản) -->
+    <div id="modalPortTrade" class="modal-backdrop hidden">
+      <div class="modal-card minimal-trade-modal">
+        <div class="modal-header">
+          <h3 id="portTradeTitle">⚓ GIAO DỊCH CẢNG</h3>
+          <button id="btnClosePortTradeModal" class="btn-close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="portBadgeNotice" class="port-badge-info">⚓ Cảng 3:1 Tổng hợp</div>
+          <div class="minimal-trade-row">
+            <!-- Cột Bạn đưa ra (2 hoặc 3 thẻ) -->
+            <div class="trade-box give-box">
+              <span class="trade-box-badge" id="portTradeGiveBadge">BẠN ĐƯA (3)</span>
+              <select id="portTradeGiveSelect" class="form-select minimal-select">
+                <option value="wood">🌲 Gỗ</option>
+                <option value="clay">🧱 Đất sét</option>
+                <option value="sheep">🐑 Cừu</option>
+                <option value="wheat">🌾 Lúa mì</option>
+                <option value="ore">⛰️ Quặng</option>
+              </select>
+              <div id="portTradeFixedGive" class="port-fixed-res hidden">
+                <span id="portFixedResIcon">🌲</span>
+                <span id="portFixedResName">Gỗ</span>
+              </div>
+              <span id="portTradeGiveStock" class="trade-mini-stock">Bạn có: 0</span>
+            </div>
+
+            <!-- Mũi tên chuyển đổi -->
+            <div class="trade-arrow-circle">➔</div>
+
+            <!-- Cột Bạn nhận về (1 thẻ) -->
+            <div class="trade-box get-box">
+              <span class="trade-box-badge">BẠN NHẬN (1)</span>
+              <select id="portTradeGetSelect" class="form-select minimal-select">
+                <option value="clay">🧱 Đất sét</option>
+                <option value="wood">🌲 Gỗ</option>
+                <option value="sheep">🐑 Cừu</option>
+                <option value="wheat">🌾 Lúa mì</option>
+                <option value="ore">⛰️ Quặng</option>
+              </select>
+              <span id="portTradeGetStock" class="trade-mini-stock">Kho còn: 19</span>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button id="btnExecutePortTrade" class="btn btn-success btn-block btn-minimal-trade">Xác nhận đổi qua Cảng</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 1C: Giao dịch với Người chơi (Dedicated Player-to-Player Trade Modal - Tối giản) -->
+    <div id="modalPlayerTrade" class="modal-backdrop hidden">
+      <div class="modal-card minimal-trade-modal player-trade-minimal">
+        <div class="modal-header">
+          <h3>🤝 GIAO DỊCH: <strong id="playerTradeTargetName">Đối thủ</strong></h3>
+          <button id="btnClosePlayerTradeModal" class="btn-close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="domestic-trade-grid">
+            <div class="domestic-col">
+              <h4>Bạn muốn đưa ra:</h4>
+              <div class="res-counter-row" data-res="wood">
+                <span>🌲 Gỗ</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGiveWood">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+              <div class="res-counter-row" data-res="clay">
+                <span>🧱 Đất sét</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGiveClay">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+              <div class="res-counter-row" data-res="sheep">
+                <span>🐑 Cừu</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGiveSheep">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+              <div class="res-counter-row" data-res="wheat">
+                <span>🌾 Lúa mì</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGiveWheat">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+              <div class="res-counter-row" data-res="ore">
+                <span>⛰️ Quặng</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGiveOre">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="domestic-col">
+              <h4>Bạn muốn nhận về:</h4>
+              <div class="res-counter-row" data-res="wood">
+                <span>🌲 Gỗ</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGetWood">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+              <div class="res-counter-row" data-res="clay">
+                <span>🧱 Đất sét</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGetClay">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+              <div class="res-counter-row" data-res="sheep">
+                <span>🐑 Cừu</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGetSheep">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+              <div class="res-counter-row" data-res="wheat">
+                <span>🌾 Lúa mì</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGetWheat">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+              <div class="res-counter-row" data-res="ore">
+                <span>⛰️ Quặng</span>
+                <div class="counter-ctrls">
+                  <button class="btn-dec">-</button>
+                  <span class="count-val" id="domesticGetOre">0</span>
+                  <button class="btn-inc">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Khu vực trạng thái đề xuất giao dịch đang hoạt động -->
+          <div id="activeTradeStatusBox" class="active-trade-status hidden">
+            <div class="trade-waiting-text">Đang chờ phản hồi từ đối thủ...</div>
+            <div id="tradeResponsesList" class="trade-responses-list"></div>
+            <button id="btnCancelActiveTrade" class="btn btn-danger btn-sm">Hủy đề xuất</button>
+          </div>
+
+          <div class="modal-footer">
+            <button id="btnSendPlayerTradeOffer" class="btn btn-accent btn-block btn-minimal-trade">Gửi đề xuất giao dịch</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 2: Thông báo đề xuất giao dịch từ đối thủ (Received Trade Proposal) -->
+    <div id="modalTradeProposal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>📬 ĐỀ XUẤT GIAO DỊCH MỚI</h3>
+        </div>
+        <div class="modal-body">
+          <p id="tradeProposalAuthor" class="trade-author-text">Đối thủ muốn đổi tài nguyên với bạn:</p>
+          <div class="trade-preview-box">
+            <div class="preview-item">
+              <span class="preview-title">HỌ ĐƯA CHO BẠN:</span>
+              <div id="tradeProposalGiveCards" class="res-tags-list"></div>
+            </div>
+            <div class="preview-divider">⇄</div>
+            <div class="preview-item">
+              <span class="preview-title">HỌ MUỐN NHẬN:</span>
+              <div id="tradeProposalReceiveCards" class="res-tags-list"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btnAcceptTradeProposal" class="btn btn-success">✓ Đồng ý đổi</button>
+          <button id="btnRejectTradeProposal" class="btn btn-danger">✕ Từ chối</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 3: Bỏ thẻ khi xúc xắc ra 7 (Discard Modal) -->
+    <div id="modalDiscard" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>⚠️ TÊN CƯỚP XUẤT HIỆN! BỎ TÀI NGUYÊN</h3>
+        </div>
+        <div class="modal-body">
+          <p id="discardInstructions" class="discard-desc">
+            Xúc xắc ra 7! Bạn có trên 7 tài nguyên. Theo luật Catan, bạn phải bỏ một nửa số thẻ.
+          </p>
+          <div class="discard-count-banner">
+            Cần nộp bỏ: <strong id="discardRequiredCount">0</strong> thẻ &bull; Đã chọn: <span id="discardCurrentCount">0</span>
+          </div>
+
+          <div class="discard-counters-list">
+            <div class="res-counter-row" data-res="wood">
+              <span>🌲 Gỗ (<strong id="discardMaxWood">0</strong>)</span>
+              <div class="counter-ctrls">
+                <button class="btn-dec">-</button>
+                <span class="count-val" id="discardValWood">0</span>
+                <button class="btn-inc">+</button>
+              </div>
+            </div>
+            <div class="res-counter-row" data-res="clay">
+              <span>🧱 Đất sét (<strong id="discardMaxClay">0</strong>)</span>
+              <div class="counter-ctrls">
+                <button class="btn-dec">-</button>
+                <span class="count-val" id="discardValClay">0</span>
+                <button class="btn-inc">+</button>
+              </div>
+            </div>
+            <div class="res-counter-row" data-res="sheep">
+              <span>🐑 Cừu (<strong id="discardMaxSheep">0</strong>)</span>
+              <div class="counter-ctrls">
+                <button class="btn-dec">-</button>
+                <span class="count-val" id="discardValSheep">0</span>
+                <button class="btn-inc">+</button>
+              </div>
+            </div>
+            <div class="res-counter-row" data-res="wheat">
+              <span>🌾 Lúa mì (<strong id="discardMaxWheat">0</strong>)</span>
+              <div class="counter-ctrls">
+                <button class="btn-dec">-</button>
+                <span class="count-val" id="discardValWheat">0</span>
+                <button class="btn-inc">+</button>
+              </div>
+            </div>
+            <div class="res-counter-row" data-res="ore">
+              <span>⛰️ Quặng (<strong id="discardMaxOre">0</strong>)</span>
+              <div class="counter-ctrls">
+                <button class="btn-dec">-</button>
+                <span class="count-val" id="discardValOre">0</span>
+                <button class="btn-inc">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btnConfirmDiscard" class="btn btn-danger btn-block" disabled>Xác nhận nộp tài nguyên</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 4: Thẻ phát triển cá nhân (Dev Cards Modal) -->
+    <div id="modalDevCards" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>🎴 THẺ PHÁT TRIỂN CỦA BẠN</h3>
+          <button id="btnCloseDevCardsModal" class="btn-close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="myDevCardsList" class="my-dev-cards-list">
+            <!-- Render danh sách thẻ phát triển -->
+          </div>
+
+          <!-- Form phụ khi đánh Year of Plenty -->
+          <div id="yearOfPlentySelector" class="sub-action-card hidden">
+            <h4>🌾 Chọn 2 tài nguyên từ ngân hàng:</h4>
+            <div class="yop-grid">
+              <select id="yopRes1" class="form-select">
+                <option value="wood">🌲 Gỗ</option>
+                <option value="clay">🧱 Đất sét</option>
+                <option value="sheep">🐑 Cừu</option>
+                <option value="wheat">🌾 Lúa mì</option>
+                <option value="ore">⛰️ Quặng</option>
+              </select>
+              <select id="yopRes2" class="form-select">
+                <option value="ore">⛰️ Quặng</option>
+                <option value="wheat">🌾 Lúa mì</option>
+                <option value="sheep">🐑 Cừu</option>
+                <option value="clay">🧱 Đất sét</option>
+                <option value="wood">🌲 Gỗ</option>
+              </select>
+            </div>
+            <button id="btnConfirmYearOfPlenty" class="btn btn-primary btn-sm">Xác nhận nhận 2 tài nguyên</button>
+          </div>
+
+          <!-- Form phụ khi đánh Monopoly -->
+          <div id="monopolySelector" class="sub-action-card hidden">
+            <h4>👑 Chọn tài nguyên muốn độc quyền:</h4>
+            <select id="monopolyRes" class="form-select">
+              <option value="ore">⛰️ Quặng</option>
+              <option value="wheat">🌾 Lúa mì</option>
+              <option value="sheep">🐑 Cừu</option>
+              <option value="clay">🧱 Đất sét</option>
+              <option value="wood">🌲 Gỗ</option>
+            </select>
+            <button id="btnConfirmMonopoly" class="btn btn-warning btn-sm">Chiếm đoạt từ tất cả đối thủ</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 5: Chiến thắng ván đấu (Victory Modal) -->
+    <div id="modalVictory" class="modal-backdrop hidden">
+      <div class="modal-card victory-card">
+        <div class="victory-crown">👑</div>
+        <h2 class="victory-title">CHIẾN THẮNG!</h2>
+        <div id="victoryWinnerName" class="winner-name-display">--</div>
+        <p class="victory-desc">Đã đạt đủ 10 Điểm Chiến Thắng và trở thành Chúa Tể Đảo Catan!</p>
+        <div class="modal-footer">
+          <button id="btnVictoryBackToLobby" class="btn btn-primary btn-lg">Trở về sảnh chờ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer (Chỉ hiển thị ở màn hình chờ ngoài) -->
+    <footer id="mainAppFooter" class="app-footer">
+      <p>Catan Classic Online Engine &bull; Socket.IO Realtime Multiplayer</p>
+  </div>
+
+  <!-- Socket.IO Client Library -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Main Script Module -->
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="fieldsBg" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="40%" stop-color="#eab308"/>
+      <stop offset="100%" stop-color="#a16207"/>
+    </radialGradient>
+    <linearGradient id="wheatGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="300" height="300" fill="url(#fieldsBg)"/>
+
+  <!-- Field furrows / rows -->
+  <path d="M 0 120 Q 150 90 300 120" stroke="#ca8a04" stroke-width="8" fill="none" opacity="0.4"/>
+  <path d="M 0 160 Q 150 130 300 160" stroke="#ca8a04" stroke-width="12" fill="none" opacity="0.4"/>
+  <path d="M 0 210 Q 150 180 300 210" stroke="#a16207" stroke-width="16" fill="none" opacity="0.45"/>
+  <path d="M 0 270 Q 150 240 300 270" stroke="#854d0e" stroke-width="20" fill="none" opacity="0.5"/>
+
+  <!-- Main Wheat Sheaf (Center) -->
+  <g transform="translate(150, 150)">
+    <!-- Stalks -->
+    <path d="M 0 60 Q -10 10 -25 -40" stroke="#ca8a04" stroke-width="3" fill="none"/>
+    <path d="M 0 60 Q 0 0 0 -50" stroke="#ca8a04" stroke-width="3.5" fill="none"/>
+    <path d="M 0 60 Q 10 10 25 -40" stroke="#ca8a04" stroke-width="3" fill="none"/>
+
+    <!-- Center Wheat Ear -->
+    <g transform="translate(0, -50)">
+      <ellipse cx="0" cy="0" rx="6" ry="12" fill="url(#wheatGrad)"/>
+      <ellipse cx="-5" cy="8" rx="5" ry="10" fill="url(#wheatGrad)"/>
+      <ellipse cx="5" cy="8" rx="5" ry="10" fill="url(#wheatGrad)"/>
+      <ellipse cx="-6" cy="18" rx="5" ry="10" fill="url(#wheatGrad)"/>
+      <ellipse cx="6" cy="18" rx="5" ry="10" fill="url(#wheatGrad)"/>
+      <line x1="0" y1="-12" x2="0" y2="-25" stroke="#fef08a" stroke-width="2"/>
+    </g>
+
+    <!-- Left Wheat Ear -->
+    <g transform="translate(-25, -40) rotate(-22)">
+      <ellipse cx="0" cy="0" rx="5" ry="11" fill="url(#wheatGrad)"/>
+      <ellipse cx="-4" cy="7" rx="4" ry="9" fill="url(#wheatGrad)"/>
+      <ellipse cx="4" cy="7" rx="4" ry="9" fill="url(#wheatGrad)"/>
+      <ellipse cx="-5" cy="16" rx="4" ry="9" fill="url(#wheatGrad)"/>
+      <ellipse cx="5" cy="16" rx="4" ry="9" fill="url(#wheatGrad)"/>
+      <line x1="0" y1="-11" x2="-4" y2="-22" stroke="#fef08a" stroke-width="1.8"/>
+    </g>
+
+    <!-- Right Wheat Ear -->
+    <g transform="translate(25, -40) rotate(22)">
+      <ellipse cx="0" cy="0" rx="5" ry="11" fill="url(#wheatGrad)"/>
+      <ellipse cx="-4" cy="7" rx="4" ry="9" fill="url(#wheatGrad)"/>
+      <ellipse cx="4" cy="7" rx="4" ry="9" fill="url(#wheatGrad)"/>
+      <ellipse cx="-5" cy="16" rx="4" ry="9" fill="url(#wheatGrad)"/>
+      <ellipse cx="5" cy="16" rx="4" ry="9" fill="url(#wheatGrad)"/>
+      <line x1="0" y1="-11" x2="4" y2="-22" stroke="#fef08a" stroke-width="1.8"/>
+    </g>
+
+    <!-- Tie ribbon -->
+    <rect x="-8" y="28" width="16" height="8" rx="2" fill="#ef4444"/>
+  </g>
+
+  <!-- Sun sparkle dots -->
+  <circle cx="80" cy="70" r="3" fill="#ffffff" opacity="0.6"/>
+  <circle cx="220" cy="60" r="2.5" fill="#ffffff" opacity="0.6"/>
+</svg>

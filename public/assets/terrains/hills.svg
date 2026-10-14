@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="hillsBg" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#b7410e"/>
+      <stop offset="65%" stop-color="#802a00"/>
+      <stop offset="100%" stop-color="#4a1500"/>
+    </radialGradient>
+    <linearGradient id="hillGrad1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#d95d1e"/>
+      <stop offset="100%" stop-color="#933306"/>
+    </linearGradient>
+    <linearGradient id="hillGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e07a3f"/>
+      <stop offset="100%" stop-color="#a33d09"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="300" height="300" fill="url(#hillsBg)"/>
+
+  <!-- Back Hills Layer -->
+  <path d="M -20 180 Q 70 80 160 130 Q 230 70 320 160 L 320 300 L -20 300 Z" fill="#6d2300" opacity="0.6"/>
+
+  <!-- Middle Hills Layer -->
+  <path d="M -30 220 Q 80 110 190 170 Q 250 140 330 210 L 330 300 L -30 300 Z" fill="url(#hillGrad1)"/>
+
+  <!-- Front Quarry Mound Layer -->
+  <path d="M 20 270 Q 120 140 240 230 Q 280 200 320 260 L 320 300 L 20 300 Z" fill="url(#hillGrad2)"/>
+
+  <!-- Clay/Brick Details -->
+  <g opacity="0.45" fill="#ffd1b3">
+    <!-- Clay layers & brick hints -->
+    <rect x="90" y="190" width="22" height="10" rx="2"/>
+    <rect x="116" y="190" width="22" height="10" rx="2"/>
+    <rect x="103" y="204" width="22" height="10" rx="2"/>
+    <rect x="160" y="225" width="26" height="11" rx="2"/>
+    <rect x="190" y="225" width="26" height="11" rx="2"/>
+    <rect x="175" y="240" width="26" height="11" rx="2"/>
+  </g>
+
+  <!-- Hill ridge highlight lines -->
+  <path d="M 60 145 Q 120 130 180 165" stroke="#ffaa75" stroke-width="2.5" fill="none" opacity="0.5"/>
+  <path d="M 120 175 Q 160 170 210 205" stroke="#ffaa75" stroke-width="2" fill="none" opacity="0.5"/>
+</svg>
