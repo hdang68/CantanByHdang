@@ -22,6 +22,31 @@
         <button id="btnToggleBoardView" class="btn btn-secondary btn-sm">
           🗺️ Bàn Cờ
         </button>
+
+        <!-- Khung Điều Chỉnh Âm Lượng Header -->
+        <div class="volume-control-wrapper" id="headerVolumeWrapper">
+          <button id="btnToggleSoundHeader" class="btn btn-secondary btn-sm btn-sound-trigger" title="Nhấp để bật/tắt tiếng, rê chuột để chỉnh âm lượng">
+            <span id="soundIconHeader">🔊</span> <span id="soundTextHeader">50%</span>
+          </button>
+          <div class="volume-popover" id="headerVolumePopover">
+            <div class="volume-popover-inner">
+              <div class="volume-header-row">
+                <span class="volume-title">Âm lượng</span>
+                <span id="volumePercentHeader" class="volume-val-badge">50%</span>
+              </div>
+              <div class="volume-slider-row">
+                <button type="button" class="btn-vol-mute-icon" id="btnQuickMuteHeader" title="Tắt / Bật tiếng">🔊</button>
+                <input type="range" id="volumeSliderHeader" min="0" max="100" value="50" class="volume-range-slider" aria-label="Âm lượng trò chơi">
+              </div>
+              <div class="volume-preset-buttons">
+                <button type="button" class="btn-vol-preset" data-vol="0">0%</button>
+                <button type="button" class="btn-vol-preset" data-vol="30">30%</button>
+                <button type="button" class="btn-vol-preset" data-vol="65">65%</button>
+                <button type="button" class="btn-vol-preset" data-vol="100">100%</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="connection-status-bar">
@@ -89,6 +114,22 @@
               </button>
             </div>
             <button id="btnLeaveRoom" class="btn btn-danger btn-sm">Rời phòng</button>
+          </div>
+
+          <!-- Khu vực tùy chỉnh bản đồ trong sảnh chờ (Chủ phòng được phép đổi map) -->
+          <div id="lobbyMapPanel" class="lobby-map-panel">
+            <div class="lobby-map-header">
+              <span class="lobby-map-label">Bản đồ trò chơi:</span>
+              <span id="lobbyBoardBadge" class="lobby-board-badge">Bản đồ Tiêu chuẩn</span>
+            </div>
+            <div id="lobbyHostMapActions" class="lobby-map-actions">
+              <button id="btnLobbyRandomBoard" class="btn btn-accent btn-sm" title="Chủ phòng: Sinh bản đồ ngẫu nhiên mới hợp lệ">
+                🎲 Đổi map ngẫu nhiên
+              </button>
+              <button id="btnLobbyStandardBoard" class="btn btn-secondary btn-sm" title="Chủ phòng: Đặt lại bản đồ tiêu chuẩn">
+                🗺️ Map tiêu chuẩn
+              </button>
+            </div>
           </div>
 
           <div class="room-players-panel">
@@ -209,11 +250,34 @@
 
           <!-- 2. KHUNG GIỮA: BẢN ĐỒ THU PHÓNG & THANH KÉO QUÂN CỜ (CENTER STAGE) -->
           <main id="inGameCenterStage" class="in-game-center-stage">
-            <!-- Nút điều khiển Thu phóng bàn cờ (Zoom Toolbar nổi) -->
-            <div class="board-zoom-toolbar" title="Thu phóng bản đồ">
+            <!-- Nút điều khiển Thu phóng & Âm lượng nổi trên mặt bàn cờ -->
+            <div class="board-zoom-toolbar" title="Điều khiển góc nhìn & âm thanh">
               <button id="btnZoomIn" class="btn-board-zoom" title="Phóng to bản đồ">+</button>
               <button id="btnZoomOut" class="btn-board-zoom" title="Thu nhỏ bản đồ">-</button>
               <button id="btnZoomReset" class="btn-board-zoom" title="Đặt lại góc nhìn mặc định">🔄</button>
+
+              <!-- Nút & Khung Điều Chỉnh Âm Lượng Nổi Trên Bàn Cờ -->
+              <div class="volume-control-wrapper board-vol-wrapper" id="boardVolumeWrapper">
+                <button id="btnToggleSoundBoard" class="btn-board-zoom" title="Âm thanh (Nhấp để bật/tắt, rê chuột để chỉnh âm lượng)">🔊</button>
+                <div class="volume-popover board-vol-popover" id="boardVolumePopover">
+                  <div class="volume-popover-inner">
+                    <div class="volume-header-row">
+                      <span class="volume-title">Âm lượng</span>
+                      <span id="volumePercentBoard" class="volume-val-badge">50%</span>
+                    </div>
+                    <div class="volume-slider-row">
+                      <button type="button" class="btn-vol-mute-icon" id="btnQuickMuteBoard" title="Tắt / Bật tiếng">🔊</button>
+                      <input type="range" id="volumeSliderBoard" min="0" max="100" value="50" class="volume-range-slider" aria-label="Âm lượng trò chơi">
+                    </div>
+                    <div class="volume-preset-buttons">
+                      <button type="button" class="btn-vol-preset" data-vol="0">0%</button>
+                      <button type="button" class="btn-vol-preset" data-vol="30">30%</button>
+                      <button type="button" class="btn-vol-preset" data-vol="65">65%</button>
+                      <button type="button" class="btn-vol-preset" data-vol="100">100%</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Khung chứa SVG bàn cờ có thể kéo thả & lăn chuột thu phóng -->
@@ -272,8 +336,41 @@
                 </div>
               </div>
               <div id="diceVisual" class="dice-visual">
-                <span id="die1" class="die-face">-</span>
-                <span id="die2" class="die-face">-</span>
+                <div class="dice-tray" id="diceTray">
+                  <!-- Viên 1: Xúc xắc Ngà Catan (Ivory White Die) -->
+                  <div class="dice-wrapper" id="dieWrapper1">
+                    <div id="diceCube1" class="dice-cube die-ivory" data-value="1">
+                      <div class="cube-face face-1"><span class="pip pip-center pip-accent"></span></div>
+                      <div class="cube-face face-2"><span class="pip pip-top-left"></span><span class="pip pip-bottom-right"></span></div>
+                      <div class="cube-face face-3"><span class="pip pip-top-left"></span><span class="pip pip-center"></span><span class="pip pip-bottom-right"></span></div>
+                      <div class="cube-face face-4"><span class="pip pip-top-left"></span><span class="pip pip-top-right"></span><span class="pip pip-bottom-left"></span><span class="pip pip-bottom-right"></span></div>
+                      <div class="cube-face face-5"><span class="pip pip-top-left"></span><span class="pip pip-top-right"></span><span class="pip pip-center"></span><span class="pip pip-bottom-left"></span><span class="pip pip-bottom-right"></span></div>
+                      <div class="cube-face face-6"><span class="pip pip-top-left"></span><span class="pip pip-top-right"></span><span class="pip pip-mid-left"></span><span class="pip pip-mid-right"></span><span class="pip pip-bottom-left"></span><span class="pip pip-bottom-right"></span></div>
+                    </div>
+                    <div class="die-shadow" id="dieShadow1"></div>
+                  </div>
+
+                  <!-- Viên 2: Xúc xắc Đỏ Đất Catan (Terracotta Crimson Die) -->
+                  <div class="dice-wrapper" id="dieWrapper2">
+                    <div id="diceCube2" class="dice-cube die-crimson" data-value="1">
+                      <div class="cube-face face-1"><span class="pip pip-center pip-accent"></span></div>
+                      <div class="cube-face face-2"><span class="pip pip-top-left"></span><span class="pip pip-bottom-right"></span></div>
+                      <div class="cube-face face-3"><span class="pip pip-top-left"></span><span class="pip pip-center"></span><span class="pip pip-bottom-right"></span></div>
+                      <div class="cube-face face-4"><span class="pip pip-top-left"></span><span class="pip pip-top-right"></span><span class="pip pip-bottom-left"></span><span class="pip pip-bottom-right"></span></div>
+                      <div class="cube-face face-5"><span class="pip pip-top-left"></span><span class="pip pip-top-right"></span><span class="pip pip-center"></span><span class="pip pip-bottom-left"></span><span class="pip pip-bottom-right"></span></div>
+                      <div class="cube-face face-6"><span class="pip pip-top-left"></span><span class="pip pip-top-right"></span><span class="pip pip-mid-left"></span><span class="pip pip-mid-right"></span><span class="pip pip-bottom-left"></span><span class="pip pip-bottom-right"></span></div>
+                    </div>
+                    <div class="die-shadow" id="dieShadow2"></div>
+                  </div>
+                </div>
+
+                <!-- Thống kê điểm xúc xắc -->
+                <div id="diceScoreBanner" class="dice-score-banner">
+                  <span class="dice-score-text" id="diceScoreText">Chưa gieo</span>
+                  <!-- Giữ die1 và die2 dạng ẩn để tương thích 100% với code cũ -->
+                  <span id="die1" class="hidden">-</span>
+                  <span id="die2" class="hidden">-</span>
+                </div>
               </div>
               <button id="btnRollDice" class="btn btn-primary btn-block btn-roll-dice" disabled>
                 🎲 Gieo xúc xắc

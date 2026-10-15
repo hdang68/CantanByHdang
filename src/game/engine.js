@@ -170,7 +170,8 @@ export class CatanEngine {
 
     // Đặt khu định cư
     const vertex = this.board.vertices[vertexId];
-    vertex.building = { playerId, type: 'settlement', color: currentP.color.hex };
+    const playerColorHex = (typeof currentP.color === 'string' ? currentP.color : currentP.color?.hex) || '#e74c3c';
+    vertex.building = { playerId, type: 'settlement', color: playerColorHex };
     currentP.pieces.settlementsRemaining -= 1;
     this.setupLastSettlementVertexId = vertexId;
 
@@ -226,7 +227,8 @@ export class CatanEngine {
 
     // Đặt đường
     const edge = this.board.edges[edgeId];
-    edge.road = { playerId, color: currentP.color.hex };
+    const roadColorHex = (typeof currentP.color === 'string' ? currentP.color : currentP.color?.hex) || '#e74c3c';
+    edge.road = { playerId, color: roadColorHex };
     currentP.pieces.roadsRemaining -= 1;
     this.logEvent(`${currentP.name} đặt con đường nối với Khu định cư`, 'info');
 
@@ -455,7 +457,8 @@ export class CatanEngine {
     }
 
     const edge = this.board.edges[edgeId];
-    edge.road = { playerId, color: currentP.color.hex };
+    const roadColorHex = (typeof currentP.color === 'string' ? currentP.color : currentP.color?.hex) || '#e74c3c';
+    edge.road = { playerId, color: roadColorHex };
     currentP.pieces.roadsRemaining -= 1;
 
     this.logEvent(`${currentP.name} đã xây một con đường`, 'info');
@@ -493,7 +496,8 @@ export class CatanEngine {
     this.lastProductionId = null;
 
     const vertex = this.board.vertices[vertexId];
-    vertex.building = { playerId, type: 'settlement', color: currentP.color.hex };
+    const playerColorHex = (typeof currentP.color === 'string' ? currentP.color : currentP.color?.hex) || '#e74c3c';
+    vertex.building = { playerId, type: 'settlement', color: playerColorHex };
     currentP.pieces.settlementsRemaining -= 1;
 
     this.logEvent(`${currentP.name} đã xây một Khu định cư (+1 Điểm)`, 'success');

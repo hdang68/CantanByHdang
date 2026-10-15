@@ -5,7 +5,10 @@ import {
   getRoom,
   getRoomPublicView,
   startGameInRoom,
-  reconnectPlayer
+  reconnectPlayer,
+  randomizeRoomBoard,
+  setStandardRoomBoard,
+  changePlayerColor
 } from './rooms.js';
 import { executePlayerTrade, createTradeOffer } from './game/trading.js';
 
@@ -165,6 +168,74 @@ export function setupSocketHandlers(io) {
       } catch (err) {
         console.error('[Reconnect] Lỗi kết nối lại:', err);
         if (typeof callback === 'function') callback({ success: false, error: 'Lỗi khôi phục phiên.' });
+      }
+    });
+    // 3B. Đổi bản đồ ngẫu nhiên trong sảnh chờ (Chỉ chủ phòng)
+    socket.on('room:randomize_board', (callback) => {
+      try {
+        const roomId = socket.data.roomId;
+        if (!roomId) {
+          if (typeof callback === 'function') callback({ success: false, error: 'Bạn chưa vào phòng.' });
+          return;
+        }
+        const result = randomizeRoomBoard(roomId, socket.id);
+        if (!result.success) {
+          if (typeof callback === 'function') callback(result);
+          return;
+        }
+        const publicView = getRoomPublicView(result.room);
+        console.log(`[Room] Chủ phòng đã sinh bản đồ ngẫu nhiên cho phòng ${roomId}`);
+        io.to(roomId).emit('room:state', publicView);
+        if (typeof callback === 'function') callback({ success: true, room: publicView });
+      } catch (err) {
+        console.error('[Room] Lỗi đổi map ngẫu nhiên:', err);
+        if (typeof callback === 'function') callback({ success: false, error: 'Không thể đổi bản đồ lúc này.' });
+      }
+    });
+
+    // 3C. Đặt về bản đồ tiêu chuẩn trong sảnh chờ (Chỉ chủ phòng)
+    socket.on('room:standard_board', (callback) => {
+      try {
+        const roomId = socket.data.roomId;
+        if (!roomId) {
+          if (typeof callback === 'function') callback({ success: false, error: 'Bạn chưa vào phòng.' });
+          return;
+        }
+        const result = setStandardRoomBoard(roomId, socket.id);
+        if (!result.success) {
+          if (typeof callback === 'function') callback(result);
+          return;
+        }
+        const publicView = getRoomPublicView(result.room);
+        console.log(`[Room] Chủ phòng đã đặt lại bản đồ tiêu chuẩn cho phòng ${roomId}`);
+        io.to(roomId).emit('room:state', publicView);
+        if (typeof callback === 'function') callback({ success: true, room: publicView });
+      } catch (err) {
+        console.error('[Room] Lỗi đặt map tiêu chuẩn:', err);
+        if (typeof callback === 'function') callback({ success: false, error: 'Không thể đặt bản đồ lúc này.' });
+      }
+    });
+
+    // 3D. Người chơi đổi màu quân cờ trong sảnh chờ
+    socket.on('room:change_color', ({ colorHex }, callback) => {
+      try {
+        const roomId = socket.data.roomId;
+        if (!roomId) {
+          if (typeof callback === 'function') callback({ success: false, error: 'Bạn chưa vào phòng.' });
+          return;
+        }
+        const result = changePlayerColor(roomId, socket.id, colorHex);
+        if (!result.success) {
+          if (typeof callback === 'function') callback(result);
+          return;
+        }
+        const publicView = getRoomPublicView(result.room);
+        console.log(`[Room] Người chơi ${result.player.name} (${result.player.id}) đổi sang màu ${result.player.color.name} (${result.player.color.hex}) trong phòng ${roomId}`);
+        io.to(roomId).emit('room:state', publicView);
+        if (typeof callback === 'function') callback({ success: true, room: publicView, player: result.player });
+      } catch (err) {
+        console.error('[Room] Lỗi đổi màu người chơi:', err);
+        if (typeof callback === 'function') callback({ success: false, error: 'Không thể đổi màu lúc này.' });
       }
     });
 

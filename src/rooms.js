@@ -5,13 +5,17 @@ import { CatanEngine } from './game/engine.js';
 // Danh sách phòng lưu trong RAM
 const rooms = new Map();
 
-// Bảng màu cho tối đa 4 người chơi theo Catan Classic
-export const PLAYER_COLORS = [
-  { name: 'Red', hex: '#e74c3c' },
-  { name: 'Blue', hex: '#3498db' },
-  { name: 'Orange', hex: '#e67e22' },
-  { name: 'White', hex: '#ecf0f1' }
+// Bảng màu hỗ trợ cho người chơi Catan (4 màu kinh điển + màu mở rộng)
+export const AVAILABLE_PLAYER_COLORS = [
+  { name: 'Đỏ', hex: '#e74c3c' },
+  { name: 'Xanh dương', hex: '#3498db' },
+  { name: 'Cam', hex: '#e67e22' },
+  { name: 'Trắng', hex: '#ecf0f1' },
+  { name: 'Xanh lá', hex: '#2ecc71' },
+  { name: 'Tím', hex: '#9b59b6' }
 ];
+
+export const PLAYER_COLORS = AVAILABLE_PLAYER_COLORS.slice(0, 4);
 
 export function generateRoomId(length = 5) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -40,7 +44,7 @@ export function createRoom(hostPlayerName, socketId, isRandomBoard = false) {
     name: hostPlayerName.trim().slice(0, 20) || 'Người chơi 1',
     socketId,
     sessionToken,
-    color: PLAYER_COLORS[0],
+    color: { ...AVAILABLE_PLAYER_COLORS[0] },
     isHost: true,
     connected: true
   };
@@ -54,6 +58,7 @@ export function createRoom(hostPlayerName, socketId, isRandomBoard = false) {
     hostId: playerId,
     players: [hostPlayer],
     board,
+    boardMode: isRandomBoard ? 'RANDOM' : 'STANDARD',
     engine: null
   };
 
@@ -82,14 +87,17 @@ export function joinRoom(roomId, playerName, socketId) {
 
   const playerId = `p_${crypto.randomBytes(4).toString('hex')}`;
   const sessionToken = generateSessionToken();
-  const colorIndex = room.players.length;
+
+  // Chọn màu chưa được người chơi khác trong phòng sử dụng
+  const usedHexes = room.players.map(p => p.color?.hex?.toLowerCase());
+  const assignedColor = AVAILABLE_PLAYER_COLORS.find(c => !usedHexes.includes(c.hex.toLowerCase())) || AVAILABLE_PLAYER_COLORS[0];
 
   const newPlayer = {
     id: playerId,
     name: playerName.trim().slice(0, 20) || `Người chơi ${room.players.length + 1}`,
     socketId,
     sessionToken,
-    color: PLAYER_COLORS[colorIndex],
+    color: { ...assignedColor },
     isHost: false,
     connected: true
   };
@@ -168,12 +176,63 @@ export function leaveRoom(roomId, socketId) {
   return { room, removedPlayer };
 }
 
+export function randomizeRoomBoard(roomId, requestingSocketId) {
+  const room = getRoom(roomId);
+  if (!room) return { success: false, error: 'Phòng không tồn tại.' };
+  if (room.status !== 'LOBBY') return { success: false, error: 'Chỉ có thể đổi bản đồ khi đang ở sảnh chờ.' };
+
+  const requestingPlayer = room.players.find(p => p.socketId === requestingSocketId);
+  if (!requestingPlayer || !requestingPlayer.isHost) {
+    return { success: false, error: 'Chỉ chủ phòng mới có quyền đổi bản đồ.' };
+  }
+
+  room.board = createRandomBoard();
+  room.boardMode = 'RANDOM';
+  return { success: true, room };
+}
+
+export function setStandardRoomBoard(roomId, requestingSocketId) {
+  const room = getRoom(roomId);
+  if (!room) return { success: false, error: 'Phòng không tồn tại.' };
+  if (room.status !== 'LOBBY') return { success: false, error: 'Chỉ có thể đổi bản đồ khi đang ở sảnh chờ.' };
+
+  const requestingPlayer = room.players.find(p => p.socketId === requestingSocketId);
+  if (!requestingPlayer || !requestingPlayer.isHost) {
+    return { success: false, error: 'Chỉ chủ phòng mới có quyền đổi bản đồ.' };
+  }
+
+  room.board = createStandardBoard();
+  room.boardMode = 'STANDARD';
+  return { success: true, room };
+}
+
+export function changePlayerColor(roomId, requestingSocketId, newColorHex) {
+  const room = getRoom(roomId);
+  if (!room) return { success: false, error: 'Phòng không tồn tại.' };
+  if (room.status !== 'LOBBY') return { success: false, error: 'Chỉ có thể đổi màu khi đang ở sảnh chờ.' };
+
+  const player = room.players.find(p => p.socketId === requestingSocketId);
+  if (!player) return { success: false, error: 'Không tìm thấy người chơi.' };
+
+  const targetColor = AVAILABLE_PLAYER_COLORS.find(c => c.hex.toLowerCase() === (newColorHex || '').toLowerCase());
+  if (!targetColor) return { success: false, error: 'Màu đã chọn không hợp lệ.' };
+
+  const isTaken = room.players.some(p => p.id !== player.id && p.color?.hex?.toLowerCase() === targetColor.hex.toLowerCase());
+  if (isTaken) {
+    return { success: false, error: `Màu ${targetColor.name} đã có người chơi khác chọn.` };
+  }
+
+  player.color = { ...targetColor };
+  return { success: true, room, player };
+}
+
 export function getRoomPublicView(room) {
   if (!room) return null;
   return {
     id: room.id,
     status: room.status,
     hostId: room.hostId,
+    boardMode: room.boardMode || 'STANDARD',
     players: room.players.map(p => ({
       id: p.id,
       name: p.name,
@@ -181,6 +240,7 @@ export function getRoomPublicView(room) {
       isHost: p.isHost,
       connected: p.connected
     })),
-    board: room.board
+    board: room.board,
+    availableColors: AVAILABLE_PLAYER_COLORS
   };
 }

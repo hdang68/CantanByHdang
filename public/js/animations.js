@@ -70,7 +70,7 @@ export function spawnFlyingItem(itemType, startPos, targetPos, options = {}) {
     delay = 0,
     label = null,
     centerPos = null,
-    duration = 1350, // ms - Tăng thời lượng để có nhịp giữ ở giữa bàn rõ ràng
+    duration = 1850, // ms - Nhịp bay khoan thai, rõ nét hơn theo yêu cầu
     onComplete = null
   } = options;
 
@@ -112,9 +112,9 @@ export function spawnFlyingItem(itemType, startPos, targetPos, options = {}) {
   const mid2X = (cX + tX) / 2;
   const mid2Y = Math.min(cY, tY) - 30 - Math.random() * 25;
 
-  chip.style.left = `${sX}px`;
-  chip.style.top = `${sY}px`;
-  chip.style.transform = `translate(0px, 0px) scale(0.8)`;
+  chip.style.left = '0px';
+  chip.style.top = '0px';
+  chip.style.transform = `translate3d(${sX}px, ${sY}px, 0px) scale(0.8)`;
   chip.style.opacity = '1';
 
   root.appendChild(chip);
@@ -135,18 +135,16 @@ export function spawnFlyingItem(itemType, startPos, targetPos, options = {}) {
     if (progress < 0.35) {
       // GIAI ĐOẠN 1: Từ Gốc (startPos) -> Bay ra giữa bàn (centerPos) và ZOOM LỚN (0.8 -> 2.85)
       const u = progress / 0.35; // 0 -> 1
-      const t = easeOutQuad(u);
+      const t = Math.sin((u * Math.PI) / 2); // Khớp vận tốc mượt mà
       const invT = 1 - t;
 
       curX = (invT * invT * sX) + (2 * invT * t * mid1X) + (t * t * cX);
       curY = (invT * invT * sY) + (2 * invT * t * mid1Y) + (t * t * cY);
 
-      // Scale tăng vọt từ 0.8 lên 2.85
-      currentScale = 0.8 + 2.05 * Math.sin((u * Math.PI) / 2);
+      currentScale = 0.8 + 2.05 * t;
 
-      // Nhãn tên hiển thị dần khi phóng to
       if (labelElem) {
-        labelElem.style.opacity = u > 0.4 ? String(Math.min((u - 0.4) / 0.4, 1)) : '0';
+        labelElem.style.opacity = u > 0.35 ? String(Math.min((u - 0.35) / 0.35, 1)) : '0';
       }
 
       if (u > 0.7) {
@@ -154,13 +152,11 @@ export function spawnFlyingItem(itemType, startPos, targetPos, options = {}) {
       }
     } else if (progress <= 0.65) {
       // GIAI ĐOẠN 2: GIỮ MỘT NHỊP LÂU HƠN Ở GIỮA BÀN (HOLD AT CENTER ZOOM)
-      // Dừng chân tại tâm bàn cờ với hiệu ứng lơ lửng nhẹ và hào quang sáng rực
       const holdRatio = (progress - 0.35) / 0.30; // 0 -> 1
       const hoverFloat = Math.sin(holdRatio * Math.PI) * 4; // Nhấp nhô nhẹ 4px
       curX = cX;
       curY = cY - hoverFloat;
 
-      // Giữ kích thước phóng to 2.85 - 2.95 cực đại trong suốt nhịp dừng
       currentScale = 2.85 + Math.sin(holdRatio * Math.PI) * 0.12;
 
       chip.classList.add('zoomed-large');
@@ -170,18 +166,16 @@ export function spawnFlyingItem(itemType, startPos, targetPos, options = {}) {
     } else {
       // GIAI ĐOẠN 3: Từ giữa bàn (centerPos) -> Bay đến Đích (targetPos) và THU NHỎ DẦN (2.85 -> 0.55)
       const u = (progress - 0.65) / 0.35; // 0 -> 1
-      const t = easeInQuad(u);
+      const t = 1 - Math.cos((u * Math.PI) / 2); // Khớp gia tốc êm ái
       const invT = 1 - t;
 
       curX = (invT * invT * cX) + (2 * invT * t * mid2X) + (t * t * tX);
       curY = (invT * invT * cY) + (2 * invT * t * mid2Y) + (t * t * tY);
 
-      // Scale thu nhỏ dần từ 2.85 xuống 0.55
-      currentScale = 2.85 - (2.85 - 0.55) * Math.sin((u * Math.PI) / 2);
+      currentScale = 2.85 - (2.85 - 0.55) * t;
 
-      // Nhãn tên mờ dần khi bắt đầu thu nhỏ về đích
       if (labelElem) {
-        labelElem.style.opacity = u < 0.4 ? String(1 - (u / 0.4)) : '0';
+        labelElem.style.opacity = u < 0.35 ? String(1 - (u / 0.35)) : '0';
       }
 
       if (u > 0.25) {
@@ -191,8 +185,9 @@ export function spawnFlyingItem(itemType, startPos, targetPos, options = {}) {
 
     const opacity = progress > 0.93 ? 1 - (progress - 0.93) / 0.07 : 1;
 
-    chip.style.transform = `translate(${curX - sX}px, ${curY - sY}px) scale(${currentScale})`;
-    chip.style.opacity = String(opacity);
+    // Sử dụng GPU translate3d hardware accelerated
+    chip.style.transform = `translate3d(${curX.toFixed(1)}px, ${curY.toFixed(1)}px, 0px) scale(${currentScale.toFixed(3)})`;
+    chip.style.opacity = opacity.toFixed(3);
 
     if (progress < 1) {
       requestAnimationFrame(animate);
@@ -233,7 +228,7 @@ export function spawnImpactRipple(x, y, color) {
   ripple.style.borderColor = color || '#f1c40f';
   root.appendChild(ripple);
 
-  setTimeout(() => ripple.remove(), 450);
+  setTimeout(() => ripple.remove(), 550);
 }
 
 /**
@@ -257,7 +252,7 @@ export function animateHarvestProduction(productionEvents, getHexCoordsFn, getPl
 
     for (let i = 0; i < (evt.count || 1); i++) {
       spawnFlyingItem(evt.resource, hexCoords, targetPos, {
-        delay: delayCounter * 120,
+        delay: delayCounter * 160, // Nhịp bay nối đuôi thư thả hơn
         onComplete: () => {
           playerEl.classList.remove('pulse-receive');
           void playerEl.offsetWidth;
@@ -301,7 +296,7 @@ export function animateSpendResources(cost, getPlayerElementFn, playerId, getBan
 
     for (let i = 0; i < amount; i++) {
       spawnFlyingItem(res, startPos, targetPos, {
-        delay: delayCounter * 100,
+        delay: delayCounter * 140, // Nhịp chi trả nhẹ nhàng
         onComplete: () => {
           if (bankEl) {
             bankEl.classList.remove('pulse-receive');
@@ -352,11 +347,11 @@ export function animateBankTrade(playerId, giveRes, giveCount, getRes, getCount,
         }
       }
     });
-    delay += 90;
+    delay += 140;
   }
 
   // Nhận lại từ Ngân hàng (sau một nhịp nhỏ)
-  delay += 100;
+  delay += 160;
   for (let i = 0; i < (getCount || 1); i++) {
     spawnFlyingItem(getRes, getBankPos, playerPos, {
       delay,
@@ -366,7 +361,7 @@ export function animateBankTrade(playerId, giveRes, giveCount, getRes, getCount,
         playerEl.classList.add('pulse-receive');
       }
     });
-    delay += 90;
+    delay += 140;
   }
 }
 
@@ -399,7 +394,7 @@ export function animatePlayerTrade(playerAId, playerBId, give, receive, getPlaye
             pBEl.classList.add('pulse-receive');
           }
         });
-        delay += 90;
+        delay += 140;
       }
     });
   }
@@ -416,7 +411,7 @@ export function animatePlayerTrade(playerAId, playerBId, give, receive, getPlaye
             pAEl.classList.add('pulse-receive');
           }
         });
-        delay += 90;
+        delay += 140;
       }
     });
   }
@@ -480,7 +475,7 @@ export function animateDevCardPlay(playerId, cardType, getPlayerElementFn) {
 
   spawnFlyingItem(cardType || 'dev_card', startPos, centerPos, {
     label: `Kích hoạt: ${(cardType && ITEM_CONFIG[cardType]) ? ITEM_CONFIG[cardType].name : 'Thẻ bài'}`,
-    duration: 1000,
+    duration: 1500,
     onComplete: () => {
       spawnImpactRipple(centerPos.x, centerPos.y, ITEM_CONFIG[cardType]?.color || '#f1c40f');
     }

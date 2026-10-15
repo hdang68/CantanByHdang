@@ -3,6 +3,7 @@
  * Vẽ toàn bộ bàn cờ Catan Classic bằng đồ họa vector SVG chuẩn.
  */
 
+import Panzoom from '/vendor/panzoom.es.js';
 import {
   BOARD_CONFIG,
   TERRAIN_THEMES,
@@ -18,28 +19,44 @@ const NUMBER_PIPS = {
 
 export class SvgBoardRenderer {
   constructor(containerElement, boardData, options = {}) {
+    // Dọn dẹp instance cũ nếu container đã từng gắn renderer
+    if (containerElement && containerElement._boardRendererInstance && typeof containerElement._boardRendererInstance.destroy === 'function') {
+      containerElement._boardRendererInstance.destroy();
+    }
+    if (containerElement) {
+      containerElement._boardRendererInstance = this;
+    }
+
     this.container = containerElement;
     this.board = boardData;
-    this.options = options; // { onVertexClick, onEdgeClick, onHexClick }
+    this.options = options; // { onVertexClick, onEdgeClick, onHexClick, onPortClick }
 
     this.svg = null;
+    this.panzoom = null;
+    this._wheelHandler = null;
+    this.hasDragged = false;
+
     this.hexElements = new Map();
     this.vertexElements = new Map();
     this.edgeElements = new Map();
     this.portElements = new Map();
     this.robberElement = null;
+    this.isRobberGlowing = false;
 
-    // Trạng thái Thu phóng (Zoom) & Kéo bàn (Pan)
+    // Chụp lại trạng thái bàn cờ ban đầu để phát hiện công trình mới
+    this.lastBoardSnapshot = {
+      robberHexId: boardData?.robberHexId || null,
+      vertices: Object.fromEntries(Object.entries(boardData?.vertices || {}).map(([id, v]) => [id, { building: v.building ? { ...v.building } : null }])),
+      edges: Object.fromEntries(Object.entries(boardData?.edges || {}).map(([id, e]) => [id, { road: e.road ? { ...e.road } : null }]))
+    };
+
+    // ViewBox chuẩn cố định của bàn Catan
     this.viewBox = {
       x: 0,
       y: 0,
       width: BOARD_CONFIG.BOARD_WIDTH,
       height: BOARD_CONFIG.BOARD_HEIGHT
     };
-    this.initialViewBox = { ...this.viewBox };
-    this.isPanning = false;
-    this.startPan = { x: 0, y: 0 };
-    this.startViewBox = { ...this.viewBox };
 
     this.render();
   }
@@ -50,11 +67,11 @@ export class SvgBoardRenderer {
   render() {
     this.container.innerHTML = '';
 
-    const { BOARD_WIDTH, BOARD_HEIGHT, HEX_RADIUS } = BOARD_CONFIG;
+    const { BOARD_WIDTH, BOARD_HEIGHT } = BOARD_CONFIG;
 
-    // Tạo thẻ SVG chính
+    // Tạo thẻ SVG chính với viewBox chuẩn cố định 850x750
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    this.svg.setAttribute('viewBox', `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.width} ${this.viewBox.height}`);
+    this.svg.setAttribute('viewBox', `0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`);
     this.svg.setAttribute('class', 'catan-board-svg');
     this.svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
@@ -196,7 +213,7 @@ export class SvgBoardRenderer {
       const theme = PORT_THEMES[port.type] || PORT_THEMES.generic;
 
       const portItem = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      portItem.setAttribute('class', `port-item port-${port.type}`);
+      portItem.setAttribute('class', `port-item port-${port.type} panzoom-exclude`);
       portItem.setAttribute('data-port-id', port.id);
       portItem.setAttribute('data-port-type', port.type);
       portItem.style.cursor = 'pointer';
@@ -305,6 +322,7 @@ export class SvgBoardRenderer {
       texturePolygon.style.cursor = 'pointer';
 
       texturePolygon.addEventListener('click', () => {
+        if (this.hasDragged) return;
         if (this.options.onHexClick) this.options.onHexClick(hex.id);
       });
 
@@ -400,15 +418,19 @@ export class SvgBoardRenderer {
   renderRobber() {
     const robberGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     robberGroup.setAttribute('id', 'robberPiece');
-    robberGroup.setAttribute('class', 'robber-piece');
+    robberGroup.setAttribute('class', `robber-piece panzoom-exclude ${this.isRobberGlowing ? 'robber-glowing' : ''}`);
 
     // Tìm hex đang chứa Robber
     const robberHex = Object.values(this.board.hexes).find(h => h.hasRobber);
     const center = robberHex ? toSvgCoords(robberHex.center.x, robberHex.center.y) : { x: 425, y: 375 };
 
     robberGroup.innerHTML = `
-      <circle cx="${center.x}" cy="${center.y + 14}" r="11" fill="rgba(0,0,0,0.4)" filter="url(#shadowToken)"/>
-      <path d="
+      <!-- Vòng hào quang phát sáng nhẹ khi roll 7 hoặc cướp kích hoạt -->
+      <circle class="robber-aura-halo" cx="${center.x}" cy="${center.y}" r="22" fill="none" stroke="#f39c12" stroke-width="2.5" opacity="0"/>
+      <!-- Bóng chân quân cướp -->
+      <circle class="robber-shadow-base" cx="${center.x}" cy="${center.y + 14}" r="11" fill="rgba(0,0,0,0.35)"/>
+      <!-- Thân quân cướp -->
+      <path class="robber-body-shape" d="
         M ${center.x - 7} ${center.y + 14}
         L ${center.x - 5} ${center.y - 2}
         C ${center.x - 9} ${center.y - 7}, ${center.x - 5} ${center.y - 14}, ${center.x} ${center.y - 14}
@@ -416,7 +438,8 @@ export class SvgBoardRenderer {
         L ${center.x + 7} ${center.y + 14}
         Z
       " fill="#2c3e50" stroke="#17202a" stroke-width="2"/>
-      <circle cx="${center.x}" cy="${center.y - 9}" r="5" fill="#34495e"/>
+      <!-- Đầu quân cướp -->
+      <circle class="robber-head-shape" cx="${center.x}" cy="${center.y - 9}" r="5" fill="#34495e"/>
     `;
     robberGroup.style.pointerEvents = 'none';
     this.svg.appendChild(robberGroup);
@@ -444,6 +467,73 @@ export class SvgBoardRenderer {
   }
 
   /**
+   * Phân giải mã màu hợp lệ từ chuỗi, đối tượng color { hex } hoặc ID người chơi
+   */
+  resolveColor(colorInput, playerId = null) {
+    if (typeof colorInput === 'string' && (colorInput.startsWith('#') || colorInput.startsWith('rgb'))) {
+      return colorInput;
+    }
+    if (colorInput && typeof colorInput === 'object' && colorInput.hex) {
+      return colorInput.hex;
+    }
+    if (playerId && this.board?.players?.[playerId]) {
+      const p = this.board.players[playerId];
+      if (p.color?.hex) return p.color.hex;
+      if (typeof p.color === 'string') return p.color;
+    }
+    return '#e74c3c';
+  }
+
+  /**
+   * Vẽ con đường (Road) dạng thanh gỗ 3D Catan chuẩn có viền bóng và gân sáng
+   */
+  renderRoadContent(container, roadData, p1, p2) {
+    container.innerHTML = '';
+    if (!roadData) return;
+
+    const color = this.resolveColor(roadData.color || roadData, roadData.playerId);
+
+    // 1. Viền ngoài / Đổ bóng 3D gỗ (Outer Border / Bevel)
+    const roadBorder = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    roadBorder.setAttribute('class', 'road-border');
+    roadBorder.setAttribute('x1', p1.x);
+    roadBorder.setAttribute('y1', p1.y);
+    roadBorder.setAttribute('x2', p2.x);
+    roadBorder.setAttribute('y2', p2.y);
+    roadBorder.setAttribute('stroke', '#16222f');
+    roadBorder.setAttribute('stroke-width', '11');
+    roadBorder.setAttribute('stroke-linecap', 'round');
+    roadBorder.setAttribute('pointer-events', 'none');
+    container.appendChild(roadBorder);
+
+    // 2. Thân đường chính mang màu sắc của người chơi (Main Road Body)
+    const roadBody = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    roadBody.setAttribute('class', 'road-body');
+    roadBody.setAttribute('x1', p1.x);
+    roadBody.setAttribute('y1', p1.y);
+    roadBody.setAttribute('x2', p2.x);
+    roadBody.setAttribute('y2', p2.y);
+    roadBody.setAttribute('stroke', color);
+    roadBody.setAttribute('stroke-width', '7.5');
+    roadBody.setAttribute('stroke-linecap', 'round');
+    roadBody.setAttribute('pointer-events', 'none');
+    container.appendChild(roadBody);
+
+    // 3. Đường gân sáng phản quang tạo chiều sâu (Highlight Ridge)
+    const roadHighlight = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    roadHighlight.setAttribute('class', 'road-highlight');
+    roadHighlight.setAttribute('x1', p1.x);
+    roadHighlight.setAttribute('y1', p1.y);
+    roadHighlight.setAttribute('x2', p2.x);
+    roadHighlight.setAttribute('y2', p2.y);
+    roadHighlight.setAttribute('stroke', 'rgba(255, 255, 255, 0.45)');
+    roadHighlight.setAttribute('stroke-width', '2');
+    roadHighlight.setAttribute('stroke-linecap', 'round');
+    roadHighlight.setAttribute('pointer-events', 'none');
+    container.appendChild(roadHighlight);
+  }
+
+  /**
    * Vẽ 72 Cạnh (Edges) tương tác
    */
   renderEdges() {
@@ -457,29 +547,23 @@ export class SvgBoardRenderer {
       const p2 = toSvgCoords(v2.x, v2.y);
 
       const edgeItem = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      edgeItem.setAttribute('class', 'edge-slot');
+      edgeItem.setAttribute('class', 'edge-slot panzoom-exclude');
       edgeItem.setAttribute('data-edge-id', edge.id);
 
-      // 1. Đường hiển thị thực tế (Visible Road)
-      const roadLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      roadLine.setAttribute('x1', p1.x);
-      roadLine.setAttribute('y1', p1.y);
-      roadLine.setAttribute('x2', p2.x);
-      roadLine.setAttribute('y2', p2.y);
-      roadLine.setAttribute('stroke-linecap', 'round');
+      // 1. Nhóm hiển thị con đường (Road Visual Container)
+      const roadNode = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      roadNode.setAttribute('class', 'road-node');
+      this.renderRoadContent(roadNode, edge.road, p1, p2);
+      edgeItem.appendChild(roadNode);
 
-      if (edge.road) {
-        roadLine.setAttribute('stroke', edge.road.color || '#e74c3c');
-        roadLine.setAttribute('stroke-width', '8');
-        roadLine.setAttribute('filter', 'url(#shadowToken)');
-      } else {
-        roadLine.setAttribute('stroke', 'transparent');
-        roadLine.setAttribute('stroke-width', '6');
-      }
-      edgeItem.appendChild(roadLine);
+      // 2. Nhóm hiển thị hover preview nét đứt khi rê chuột
+      const previewNode = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      previewNode.setAttribute('class', 'road-preview-node');
+      edgeItem.appendChild(previewNode);
 
-      // 2. Vùng bắt sự kiện chuột rộng (Hit area 22px)
+      // 3. Vùng bắt sự kiện chuột rộng (Hit area 24px)
       const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      hitArea.setAttribute('class', 'edge-hit-area');
       hitArea.setAttribute('x1', p1.x);
       hitArea.setAttribute('y1', p1.y);
       hitArea.setAttribute('x2', p2.x);
@@ -493,22 +577,22 @@ export class SvgBoardRenderer {
       hitArea.addEventListener('mouseenter', () => {
         const currentRoad = this.board?.edges?.[edge.id]?.road;
         if (!currentRoad) {
-          roadLine.setAttribute('stroke', 'rgba(255, 255, 255, 0.55)');
-          roadLine.setAttribute('stroke-width', '6');
-          roadLine.setAttribute('stroke-dasharray', '4 4');
+          const hoverLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          hoverLine.setAttribute('x1', p1.x);
+          hoverLine.setAttribute('y1', p1.y);
+          hoverLine.setAttribute('x2', p2.x);
+          hoverLine.setAttribute('y2', p2.y);
+          hoverLine.setAttribute('stroke', 'rgba(255, 255, 255, 0.65)');
+          hoverLine.setAttribute('stroke-width', '6');
+          hoverLine.setAttribute('stroke-linecap', 'round');
+          hoverLine.setAttribute('stroke-dasharray', '4 4');
+          hoverLine.setAttribute('pointer-events', 'none');
+          previewNode.innerHTML = '';
+          previewNode.appendChild(hoverLine);
         }
       });
       hitArea.addEventListener('mouseleave', () => {
-        const currentRoad = this.board?.edges?.[edge.id]?.road;
-        if (!currentRoad) {
-          roadLine.setAttribute('stroke', 'transparent');
-          roadLine.removeAttribute('stroke-dasharray');
-        } else {
-          roadLine.setAttribute('stroke', currentRoad.color || '#e74c3c');
-          roadLine.setAttribute('stroke-width', '8');
-          roadLine.setAttribute('filter', 'url(#shadowToken)');
-          roadLine.removeAttribute('stroke-dasharray');
-        }
+        previewNode.innerHTML = '';
       });
 
       hitArea.addEventListener('click', (e) => {
@@ -518,7 +602,7 @@ export class SvgBoardRenderer {
 
       edgeItem.appendChild(hitArea);
       edgesGroup.appendChild(edgeItem);
-      this.edgeElements.set(edge.id, { item: edgeItem, roadLine });
+      this.edgeElements.set(edge.id, { item: edgeItem, roadNode, previewNode, p1, p2 });
     });
 
     this.svg.appendChild(edgesGroup);
@@ -528,21 +612,21 @@ export class SvgBoardRenderer {
    * Cập nhật đường trên cạnh (Road)
    */
   updateRoad(edgeId, playerColor, playerId = null) {
-    const edge = this.board.edges[edgeId];
+    const edge = this.board?.edges?.[edgeId];
     const elemObj = this.edgeElements.get(edgeId);
     if (!edge || !elemObj) return;
 
-    if (playerColor) {
-      edge.road = { color: playerColor, playerId: playerId || edge.road?.playerId || null };
-      elemObj.roadLine.setAttribute('stroke', playerColor);
-      elemObj.roadLine.setAttribute('stroke-width', '8');
-      elemObj.roadLine.setAttribute('filter', 'url(#shadowToken)');
-      elemObj.roadLine.removeAttribute('stroke-dasharray');
+    if (playerColor || playerId) {
+      const color = this.resolveColor(playerColor, playerId || edge.road?.playerId);
+      const roadObj = {
+        color,
+        playerId: playerId || edge.road?.playerId || null
+      };
+      edge.road = roadObj;
+      this.renderRoadContent(elemObj.roadNode, roadObj, elemObj.p1, elemObj.p2);
     } else {
       edge.road = null;
-      elemObj.roadLine.setAttribute('stroke', 'transparent');
-      elemObj.roadLine.removeAttribute('filter');
-      elemObj.roadLine.removeAttribute('stroke-dasharray');
+      elemObj.roadNode.innerHTML = '';
     }
   }
 
@@ -551,10 +635,16 @@ export class SvgBoardRenderer {
    */
   syncBoard(boardData) {
     if (!boardData) return;
-    this.board = boardData;
+
+    const prevSnapshot = this.lastBoardSnapshot;
 
     // 1. Cập nhật vị trí Tên cướp
     if (boardData.robberHexId) {
+      if (prevSnapshot && prevSnapshot.robberHexId && prevSnapshot.robberHexId !== boardData.robberHexId) {
+        if (this.options.onRobberMoved) {
+          this.options.onRobberMoved(boardData.robberHexId);
+        }
+      }
       this.updateRobberPosition(boardData.robberHexId);
     }
 
@@ -562,6 +652,18 @@ export class SvgBoardRenderer {
     if (boardData.vertices) {
       Object.values(boardData.vertices).forEach(v => {
         if (v.building) {
+          if (prevSnapshot?.vertices) {
+            const oldBuilding = prevSnapshot.vertices[v.id]?.building;
+            if (!oldBuilding && v.building) {
+              if (this.options.onBuildingPlaced) {
+                this.options.onBuildingPlaced(v.building.type || 'settlement', v.id, v.building);
+              }
+            } else if (oldBuilding && oldBuilding.type === 'settlement' && v.building.type === 'city') {
+              if (this.options.onBuildingPlaced) {
+                this.options.onBuildingPlaced('city', v.id, v.building);
+              }
+            }
+          }
           this.updateBuilding(v.id, v.building);
         }
       });
@@ -571,10 +673,30 @@ export class SvgBoardRenderer {
     if (boardData.edges) {
       Object.values(boardData.edges).forEach(e => {
         if (e.road) {
-          this.updateRoad(e.id, e.road.color, e.road.playerId);
+          if (prevSnapshot?.edges) {
+            const oldRoad = prevSnapshot.edges[e.id]?.road;
+            if (!oldRoad && e.road) {
+              if (this.options.onRoadPlaced) {
+                this.options.onRoadPlaced(e.id, e.road);
+              }
+            }
+          }
+          const color = e.road.color || boardData.players?.[e.road.playerId]?.color || '#e74c3c';
+          this.updateRoad(e.id, color, e.road.playerId);
+        } else {
+          this.updateRoad(e.id, null);
         }
       });
     }
+
+    // Lưu snapshot mới
+    this.lastBoardSnapshot = {
+      robberHexId: boardData.robberHexId,
+      vertices: Object.fromEntries(Object.entries(boardData.vertices || {}).map(([id, v]) => [id, { building: v.building ? { ...v.building } : null }])),
+      edges: Object.fromEntries(Object.entries(boardData.edges || {}).map(([id, e]) => [id, { road: e.road ? { ...e.road } : null }]))
+    };
+
+    this.board = boardData;
   }
 
   /**
@@ -588,7 +710,7 @@ export class SvgBoardRenderer {
       const p = toSvgCoords(vertex.x, vertex.y);
 
       const vertexItem = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      vertexItem.setAttribute('class', 'vertex-slot');
+      vertexItem.setAttribute('class', 'vertex-slot panzoom-exclude');
       vertexItem.setAttribute('data-vertex-id', vertex.id);
 
       // Điểm hiển thị công trình (Building Node)
@@ -696,106 +818,121 @@ export class SvgBoardRenderer {
   }
 
   /**
-   * Cài đặt tương tác Thu phóng (Wheel Zoom) và Kéo bàn (Pan)
+   * Cài đặt tương tác Thu phóng (Wheel Zoom) và Kéo bàn (Pan) siêu mượt 60-120fps bằng @panzoom/panzoom (GPU CSS Transform)
    */
   setupPanAndZoom() {
-    this.svg.addEventListener('wheel', (e) => {
+    this.panzoom = Panzoom(this.svg, {
+      canvas: true,
+      minScale: 0.35,
+      maxScale: 2.8,
+      step: 0.15,
+      cursor: 'grab',
+      excludeClass: 'panzoom-exclude',
+      handleStartEvent: () => {}
+    });
+
+    // Theo dõi trạng thái kéo bàn để tránh kích hoạt nhầm onHexClick khi vừa drag xong
+    this.hasDragged = false;
+    let startPoint = { x: 0, y: 0 };
+
+    this.svg.addEventListener('panzoomstart', (e) => {
+      const orig = e.detail?.originalEvent;
+      if (orig) {
+        startPoint = { x: orig.clientX || 0, y: orig.clientY || 0 };
+      }
+      this.hasDragged = false;
+      this.container.style.cursor = 'grabbing';
+    });
+
+    this.svg.addEventListener('panzoompan', (e) => {
+      const orig = e.detail?.originalEvent;
+      if (orig) {
+        const dist = Math.hypot((orig.clientX || 0) - startPoint.x, (orig.clientY || 0) - startPoint.y);
+        if (dist > 4) {
+          this.hasDragged = true;
+        }
+      } else {
+        this.hasDragged = true;
+      }
+    });
+
+    this.svg.addEventListener('panzoomend', () => {
+      this.container.style.cursor = 'grab';
+      setTimeout(() => {
+        this.hasDragged = false;
+      }, 60);
+    });
+
+    // Lăn chuột phóng to / thu nhỏ mượt mà theo vị trí con trỏ chuột (Focal point)
+    this._wheelHandler = (e) => {
       e.preventDefault();
-      const zoomFactor = e.deltaY < 0 ? 0.88 : 1.14;
-      this.zoomAtPoint(e.clientX, e.clientY, zoomFactor);
-    }, { passive: false });
-
-    this.svg.addEventListener('mousedown', (e) => {
-      // Chỉ kéo bàn khi không click vào đỉnh, cạnh hay vùng tương tác
-      const isVertex = e.target.closest && e.target.closest('.vertex-slot');
-      const isEdge = e.target.closest && e.target.closest('.edge-slot');
-      if (!isVertex && !isEdge) {
-        this.isPanning = true;
-        this.startPan = { x: e.clientX, y: e.clientY };
-        this.startViewBox = { ...this.viewBox };
-        this.svg.style.cursor = 'grabbing';
-      }
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      if (!this.isPanning) return;
-      const rect = this.svg.getBoundingClientRect();
-      const scaleX = this.viewBox.width / rect.width;
-      const scaleY = this.viewBox.height / rect.height;
-
-      const dx = (e.clientX - this.startPan.x) * scaleX;
-      const dy = (e.clientY - this.startPan.y) * scaleY;
-
-      this.viewBox.x = this.startViewBox.x - dx;
-      this.viewBox.y = this.startViewBox.y - dy;
-      this.applyViewBox();
-    });
-
-    window.addEventListener('mouseup', () => {
-      if (this.isPanning) {
-        this.isPanning = false;
-        this.svg.style.cursor = '';
-      }
-    });
-  }
-
-  zoomAtPoint(clientX, clientY, factor) {
-    const rect = this.svg.getBoundingClientRect();
-    const mouseXRatio = (clientX - rect.left) / rect.width;
-    const mouseYRatio = (clientY - rect.top) / rect.height;
-
-    const newWidth = this.viewBox.width * factor;
-    const newHeight = this.viewBox.height * factor;
-
-    // Giới hạn zoom từ 0.35x đến 2.6x
-    const minWidth = this.initialViewBox.width * 0.35;
-    const maxWidth = this.initialViewBox.width * 2.6;
-
-    if (newWidth < minWidth || newWidth > maxWidth) return;
-
-    this.viewBox.x += (this.viewBox.width - newWidth) * mouseXRatio;
-    this.viewBox.y += (this.viewBox.height - newHeight) * mouseYRatio;
-    this.viewBox.width = newWidth;
-    this.viewBox.height = newHeight;
-
-    this.applyViewBox();
+      this.panzoom.zoomWithWheel(e);
+    };
+    this.container.addEventListener('wheel', this._wheelHandler, { passive: false });
   }
 
   zoomIn() {
-    const rect = this.svg.getBoundingClientRect();
-    this.zoomAtPoint(rect.left + rect.width / 2, rect.top + rect.height / 2, 0.85);
+    if (this.panzoom) {
+      this.panzoom.zoomIn({ animate: true });
+    }
   }
 
   zoomOut() {
-    const rect = this.svg.getBoundingClientRect();
-    this.zoomAtPoint(rect.left + rect.width / 2, rect.top + rect.height / 2, 1.18);
+    if (this.panzoom) {
+      this.panzoom.zoomOut({ animate: true });
+    }
   }
 
   resetZoom() {
-    this.viewBox = { ...this.initialViewBox };
-    this.applyViewBox();
+    if (this.panzoom) {
+      this.panzoom.reset({ animate: true });
+    }
   }
 
-  applyViewBox() {
-    this.svg.setAttribute('viewBox', `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.width} ${this.viewBox.height}`);
+  destroy() {
+    if (this._wheelHandler && this.container) {
+      this.container.removeEventListener('wheel', this._wheelHandler);
+      this._wheelHandler = null;
+    }
+    if (this.panzoom) {
+      this.panzoom.destroy();
+      this.panzoom = null;
+    }
   }
 
   /**
-   * Lấy tọa độ màn hình thực tế (Viewport Client Pixels) của tâm ô lục giác
+   * Lấy tọa độ màn hình thực tế (Viewport Client Pixels) của tâm ô lục giác (chuẩn xác 100% với CSS GPU Transform)
    */
   getHexScreenCenter(hexId) {
-    const hex = this.board.hexes[hexId];
+    const hex = this.board?.hexes?.[hexId];
     if (!hex) return null;
 
-    const svgCoords = toSvgCoords(hex.center.x, hex.center.y);
-    const pt = this.svg.createSVGPoint();
-    pt.x = svgCoords.x;
-    pt.y = svgCoords.y;
+    const hexElem = this.hexElements.get(hexId);
+    if (hexElem) {
+      const rect = hexElem.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        return {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2
+        };
+      }
+    }
 
-    const ctm = this.svg.getScreenCTM();
-    if (!ctm) return null;
-    const screenPt = pt.matrixTransform(ctm);
-    return { x: screenPt.x, y: screenPt.y };
+    // Fallback qua SVG point & matrix transform
+    if (this.svg && this.svg.createSVGPoint) {
+      const svgCoords = toSvgCoords(hex.center.x, hex.center.y);
+      const pt = this.svg.createSVGPoint();
+      pt.x = svgCoords.x;
+      pt.y = svgCoords.y;
+
+      const ctm = this.svg.getScreenCTM();
+      if (ctm) {
+        const screenPt = pt.matrixTransform(ctm);
+        return { x: screenPt.x, y: screenPt.y };
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -818,14 +955,29 @@ export class SvgBoardRenderer {
   }
 
   /**
-   * Rung lắc Tên cướp khi xúc xắc ra số 7
+   * Bật/tắt hiệu ứng phát sáng nhẹ cho Tên cướp (khi roll 7 hoặc di chuyển cướp)
+   */
+  setRobberGlowing(enable = true) {
+    this.isRobberGlowing = Boolean(enable);
+    if (!this.robberElement) return;
+
+    if (this.isRobberGlowing) {
+      this.robberElement.classList.add('robber-glowing');
+    } else {
+      this.robberElement.classList.remove('robber-glowing');
+      this.robberElement.classList.remove('robber-awaken');
+    }
+  }
+
+  /**
+   * Hiệu ứng thức tỉnh / rung nhẹ Tên cướp khi xúc xắc ra số 7
    */
   shakeRobber() {
+    this.setRobberGlowing(true);
     if (!this.robberElement) return;
-    this.robberElement.classList.remove('robber-shake-active');
+    this.robberElement.classList.remove('robber-awaken');
     void this.robberElement.offsetWidth;
-    this.robberElement.classList.add('robber-shake-active');
-    setTimeout(() => this.robberElement?.classList.remove('robber-shake-active'), 850);
+    this.robberElement.classList.add('robber-awaken');
   }
 
   /**

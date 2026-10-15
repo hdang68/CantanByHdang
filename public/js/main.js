@@ -2,6 +2,7 @@
 import { initSocket, measurePing, emitAsync } from './socket.js';
 import { SvgBoardRenderer } from './board/svgRenderer.js';
 import { BoardInteractions } from './board/interactions.js';
+import { sound } from './audio/soundEngine.js';
 import {
   animateHarvestProduction,
   animateSpendResources,
@@ -30,6 +31,8 @@ const state = {
   boardInteractions: null,
   currentTradeOffer: null,
   tradeTargetPlayerId: null,
+  prevTurnPlayerId: null,
+  prevPhase: null,
   lastDiceHash: null,
   lastProductionHash: null,
   lastProductionId: null,
@@ -44,6 +47,20 @@ const state = {
   draggedData: null,
   cardZoomIndex: 1 // 0: small, 1: medium, 2: large
 };
+
+// Phục hồi phiên trước đó từ sessionStorage ngay khi nạp trang (tránh gián đoạn khi F5)
+try {
+  const savedSession = sessionStorage.getItem('catan_session');
+  if (savedSession) {
+    const sess = JSON.parse(savedSession);
+    if (sess.playerId) state.playerId = sess.playerId;
+    if (sess.playerName) state.playerName = sess.playerName;
+    if (sess.roomId) state.roomId = sess.roomId;
+    if (sess.sessionToken) state.sessionToken = sess.sessionToken;
+  }
+} catch {
+  sessionStorage.removeItem('catan_session');
+}
 
 const CARD_ZOOM_CLASSES = ['card-zoom-small', 'card-zoom-medium', 'card-zoom-large'];
 
@@ -74,6 +91,10 @@ const playerCount = document.getElementById('playerCount');
 const playerList = document.getElementById('playerList');
 const btnStartGame = document.getElementById('btnStartGame');
 const waitingNote = document.getElementById('waitingNote');
+const lobbyBoardBadge = document.getElementById('lobbyBoardBadge');
+const lobbyHostMapActions = document.getElementById('lobbyHostMapActions');
+const btnLobbyRandomBoard = document.getElementById('btnLobbyRandomBoard');
+const btnLobbyStandardBoard = document.getElementById('btnLobbyStandardBoard');
 
 // 1. CỘT TRÁI (LEFT PANEL): 4 Người chơi & Túi thẻ
 const inGameLeftPanel = document.getElementById('inGameLeftPanel');
@@ -120,6 +141,12 @@ const inGameRightPanel = document.getElementById('inGameRightPanel');
 const hudDiceWidget = document.getElementById('hudDiceWidget');
 const die1 = document.getElementById('die1');
 const die2 = document.getElementById('die2');
+const diceCube1 = document.getElementById('diceCube1');
+const diceCube2 = document.getElementById('diceCube2');
+const dieWrapper1 = document.getElementById('dieWrapper1');
+const dieWrapper2 = document.getElementById('dieWrapper2');
+const diceScoreText = document.getElementById('diceScoreText');
+const diceScoreBanner = document.getElementById('diceScoreBanner');
 const btnRollDice = document.getElementById('btnRollDice');
 const btnRollDiceFloating = document.getElementById('btnRollDiceFloating');
 
@@ -304,7 +331,10 @@ function renderBoard(boardData) {
     onVertexClick: (vertexId) => handleBoardVertexClick(vertexId),
     onEdgeClick: (edgeId) => handleBoardEdgeClick(edgeId),
     onHexClick: (hexId) => handleBoardHexClick(hexId),
-    onPortClick: (port) => handleBoardPortClick(port)
+    onPortClick: (port) => handleBoardPortClick(port),
+    onBuildingPlaced: (type) => sound.playBuild(type),
+    onRoadPlaced: () => sound.playBuild('road'),
+    onRobberMoved: () => sound.playRobber()
   });
 }
 
@@ -314,11 +344,31 @@ function renderBoard(boardData) {
 // ========================================================
 
 function handleBoardVertexClick(vertexId) {
-  // Silent - Bắt buộc dùng Kéo Thả, không cần thông báo hướng dẫn
+  if (!state.gameState || state.gameState.phase === 'GAME_OVER') return;
+  const isMyTurn = (state.gameState.currentTurnPlayerId === state.playerId);
+  if (!isMyTurn) return;
+
+  const phase = state.gameState.phase;
+  // Cho phép Click trực tiếp để đặt Khu định cư trong giai đoạn khởi đầu
+  if (phase === 'SETUP_ROUND_1' || phase === 'SETUP_ROUND_2') {
+    if (state.gameState.setupStep === 'SETTLEMENT') {
+      executePlaceSettlement(vertexId);
+    }
+  }
 }
 
 function handleBoardEdgeClick(edgeId) {
-  // Silent - Bắt buộc dùng Kéo Thả, không cần thông báo hướng dẫn
+  if (!state.gameState || state.gameState.phase === 'GAME_OVER') return;
+  const isMyTurn = (state.gameState.currentTurnPlayerId === state.playerId);
+  if (!isMyTurn) return;
+
+  const phase = state.gameState.phase;
+  // Cho phép Click trực tiếp để đặt Đường trong giai đoạn khởi đầu
+  if (phase === 'SETUP_ROUND_1' || phase === 'SETUP_ROUND_2') {
+    if (state.gameState.setupStep === 'ROAD') {
+      executePlaceRoad(edgeId);
+    }
+  }
 }
 
 function handleBoardPortClick(port) {
@@ -475,28 +525,73 @@ function updateGameHud(gameState) {
   document.body.classList.add('in-game-mode');
   lobbySection.classList.add('hidden');
 
+  // Tự động nhận diện state.playerId nếu chưa có hoặc sau khi F5:
+  // Trong view từ getPlayerView(), chỉ duy nhất người chơi hiện tại sở hữu đối tượng resources đầy đủ
+  if (!state.playerId || !gameState.players[state.playerId]) {
+    const selfPlayer = Object.values(gameState.players || {}).find(p => p && p.resources && typeof p.resources === 'object');
+    if (selfPlayer) {
+      state.playerId = selfPlayer.id;
+      if (selfPlayer.name) state.playerName = selfPlayer.name;
+      saveSession();
+    }
+  }
+
   const activePlayer = gameState.players[gameState.currentTurnPlayerId];
   const isMyTurn = (gameState.currentTurnPlayerId === state.playerId);
+
+  // Phát âm thanh nhẹ khi tới lượt của người chơi
+  if (isMyTurn && state.prevTurnPlayerId !== state.playerId) {
+    sound.playTurnNotification();
+  }
+  state.prevTurnPlayerId = gameState.currentTurnPlayerId;
 
   // 1. Cột trái: Render 4 Người chơi
   renderLeftPlayersPanel(gameState);
 
-  // 2. Xúc xắc nổi bên phải
-  if (gameState.dice) {
+  // 2. Xúc xắc 3D nổi bên phải (Catan 3D CSS Cubes)
+  if (gameState.dice && gameState.dice.length === 2) {
     die1.textContent = gameState.dice[0];
     die2.textContent = gameState.dice[1];
 
-    // Bật nhẹ thẻ số hoặc rung tên cướp khi xúc xắc gieo
     const diceHash = `${gameState.dice[0]}_${gameState.dice[1]}_${gameState.turnNumber}`;
-    if (state.lastDiceHash !== diceHash && (gameState.phase === 'TURN_MAIN' || gameState.phase.startsWith('TURN_ROBBER_'))) {
+    const isNewRoll = (state.lastDiceHash !== diceHash);
+
+    if (isNewRoll && (gameState.phase === 'TURN_MAIN' || gameState.phase.startsWith('TURN_ROBBER_'))) {
       state.lastDiceHash = diceHash;
       const sum = gameState.dice[0] + gameState.dice[1];
-      if (sum === 7) {
-        state.boardRenderer?.shakeRobber();
-      } else {
-        state.boardRenderer?.bounceNumberTokens(sum);
-      }
+
+      // Kích hoạt hoạt ảnh xoay 3D chân thực và âm thanh lắc
+      render3DDiceResult(gameState.dice[0], gameState.dice[1], true);
+
+      // Chờ xúc xắc 3D hoàn tất quay và dừng hẳn (1180ms) rồi mới kích hoạt rung tên cướp hoặc nảy thẻ số
+      setTimeout(() => {
+        if (sum === 7) {
+          state.boardRenderer?.shakeRobber();
+          sound.playRobber();
+        } else {
+          state.boardRenderer?.setRobberGlowing(false);
+          state.boardRenderer?.bounceNumberTokens(sum);
+        }
+      }, 1180);
+    } else if (!state.lastDiceHash) {
+      // Đặt góc tĩnh 3D khi vừa vào bàn cờ hoặc reconnect mà không cần lắc
+      state.lastDiceHash = diceHash;
+      render3DDiceResult(gameState.dice[0], gameState.dice[1], false);
     }
+  }
+
+  // Duy trì hào quang phát sáng nhẹ cho Tên cướp trong suốt giai đoạn cướp bóc
+  const isRobberPhase = Boolean(gameState.phase && gameState.phase.startsWith('TURN_ROBBER_'));
+  if (isRobberPhase) {
+    if (isNewRoll) {
+      setTimeout(() => {
+        state.boardRenderer?.setRobberGlowing(true);
+      }, 1180);
+    } else {
+      state.boardRenderer?.setRobberGlowing(true);
+    }
+  } else if (gameState.phase === 'TURN_MAIN' || gameState.phase === 'TURN_ROLL') {
+    state.boardRenderer?.setRobberGlowing(false);
   }
 
   const canRoll = isMyTurn && (gameState.phase === 'TURN_ROLL');
@@ -688,9 +783,17 @@ function updateGameHud(gameState) {
     }
   });
 
-  // 8. Đồng bộ bàn cờ SVG
-  if (state.boardRenderer && gameState.board) {
-    state.boardRenderer.syncBoard(gameState.board);
+  // 8. Đồng bộ bàn cờ SVG (hoặc tái tạo bàn cờ nếu cấu hình Hex khác biệt ví dụ Random Board)
+  if (gameState.board) {
+    const currentHex0 = state.board?.hexes?.[Object.keys(state.board?.hexes || {})[0]];
+    const newHex0 = gameState.board?.hexes?.[Object.keys(gameState.board?.hexes || {})[0]];
+    const hexLayoutMismatch = (!state.board || !currentHex0 || !newHex0 || currentHex0.terrain !== newHex0.terrain || currentHex0.diceNumber !== newHex0.diceNumber);
+
+    if (!state.boardRenderer || hexLayoutMismatch) {
+      renderBoard(gameState.board);
+    } else {
+      state.boardRenderer.syncBoard(gameState.board);
+    }
   }
 
   // 9. Kích hoạt hiệu ứng tài nguyên bay
@@ -700,7 +803,16 @@ function updateGameHud(gameState) {
   if (gameState.phase === 'TURN_ROBBER_DISCARD') {
     const req = gameState.pendingDiscards?.[state.playerId];
     if (req && req > 0) {
-      openDiscardModal(req, myData?.resources || {});
+      // Chờ xúc xắc dừng hẳn (1350ms) rồi mới hiện popup bỏ thẻ để kịp nhìn xúc xắc ra 7
+      if (isNewRoll) {
+        setTimeout(() => {
+          if (state.gameState?.phase === 'TURN_ROBBER_DISCARD') {
+            openDiscardModal(req, myData?.resources || {});
+          }
+        }, 1350);
+      } else {
+        openDiscardModal(req, myData?.resources || {});
+      }
     } else {
       modalDiscard.classList.add('hidden');
     }
@@ -710,10 +822,14 @@ function updateGameHud(gameState) {
 
   // 11. Modal Chiến thắng
   if (gameState.phase === 'GAME_OVER' && gameState.winnerId) {
+    if (state.prevPhase !== 'GAME_OVER') {
+      sound.playVictory();
+    }
     const winner = gameState.players[gameState.winnerId];
     victoryWinnerName.textContent = winner ? winner.name : 'Người chiến thắng';
     modalVictory.classList.remove('hidden');
   }
+  state.prevPhase = gameState.phase;
 
   // 12. Cập nhật tỷ lệ đổi ngân hàng hoặc cảng nếu modal đang mở
   if (modalBankTrade && !modalBankTrade.classList.contains('hidden')) {
@@ -765,18 +881,22 @@ function triggerParticleAnimations(gameState) {
 
   let handledAnyExplicitEvent = false;
 
-  // A. Hoạt ảnh thu hoạch tài nguyên: Đợi thẻ số bật nhẹ lên (450ms) rồi tiền tệ mới xuất hiện
+  // A. Hoạt ảnh thu hoạch tài nguyên: Đợi xúc xắc 3D tiếp đất (1180ms) + thẻ số nảy nhẹ (450ms) rồi tài nguyên mới bay
   if (gameState.lastProduction && gameState.lastProduction.length > 0 && gameState.lastProductionId) {
     if (state.lastProductionId !== gameState.lastProductionId) {
       state.lastProductionId = gameState.lastProductionId;
       handledAnyExplicitEvent = true;
       setTimeout(() => {
+        // Thu thập danh sách tài nguyên và phát âm thanh tương ứng (tiếng cừu, gỗ, quặng đá, lúa mì, đất sét)
+        const producedTypes = gameState.lastProduction.map(p => p.resource);
+        sound.playResourcesStaggered(producedTypes, 220);
+
         animateHarvestProduction(
           gameState.lastProduction,
           (hexId) => state.boardRenderer?.getHexScreenCenter(hexId),
           getPlayerDomElement
         );
-      }, 450);
+      }, 1680);
     }
   }
 
@@ -785,6 +905,7 @@ function triggerParticleAnimations(gameState) {
     if (state.lastSpentId !== gameState.lastSpent.id) {
       state.lastSpentId = gameState.lastSpent.id;
       handledAnyExplicitEvent = true;
+      sound.play('coin-fall');
       animateSpendResources(
         gameState.lastSpent.cost,
         getPlayerDomElement,
@@ -799,6 +920,7 @@ function triggerParticleAnimations(gameState) {
     if (state.lastDevCardBoughtId !== gameState.lastDevCardBought.id) {
       state.lastDevCardBoughtId = gameState.lastDevCardBought.id;
       handledAnyExplicitEvent = true;
+      sound.playCardDraw();
       animateDevCardBuy(
         gameState.lastDevCardBought.playerId,
         gameState.lastDevCardBought.cardType,
@@ -815,6 +937,10 @@ function triggerParticleAnimations(gameState) {
     if (state.lastBankTradeId !== gameState.lastBankTrade.id) {
       state.lastBankTradeId = gameState.lastBankTrade.id;
       handledAnyExplicitEvent = true;
+      sound.playTrade();
+      if (gameState.lastBankTrade.getResource) {
+        sound.playResource(gameState.lastBankTrade.getResource, 300);
+      }
       animateBankTrade(
         gameState.lastBankTrade.playerId,
         gameState.lastBankTrade.giveResource,
@@ -833,6 +959,7 @@ function triggerParticleAnimations(gameState) {
     if (state.lastPlayerTradeId !== gameState.lastPlayerTrade.id) {
       state.lastPlayerTradeId = gameState.lastPlayerTrade.id;
       handledAnyExplicitEvent = true;
+      sound.playTrade();
       animatePlayerTrade(
         gameState.lastPlayerTrade.playerAId,
         gameState.lastPlayerTrade.playerBId,
@@ -848,6 +975,7 @@ function triggerParticleAnimations(gameState) {
     if (state.lastStealId !== gameState.lastSteal.id) {
       state.lastStealId = gameState.lastSteal.id;
       handledAnyExplicitEvent = true;
+      sound.playRobber();
       animateSteal(
         gameState.lastSteal.stealerId,
         gameState.lastSteal.victimId,
@@ -863,6 +991,12 @@ function triggerParticleAnimations(gameState) {
       state.lastDevCardPlayedId = gameState.lastDevCardPlayed.id;
       handledAnyExplicitEvent = true;
       const { playerId, cardType, res1, res2, targetResource } = gameState.lastDevCardPlayed;
+
+      if (cardType === 'knight') {
+        sound.playCardPlay('knight');
+      } else {
+        sound.playCardPlay(cardType);
+      }
 
       // Bay thẻ bài ra giữa bàn và phóng to
       animateDevCardPlay(playerId, cardType, getPlayerDomElement);
@@ -962,6 +1096,7 @@ function processUniversalResourceDiffs(prevSnapshot, currentPlayers) {
             : { x: window.innerWidth - 80, y: window.innerHeight / 2 };
 
           for (let i = 0; i < diff; i++) {
+            sound.playResource(res, animDelay * 120);
             spawnFlyingItem(res, bankPos, playerPos, {
               delay: animDelay * 100,
               onComplete: () => {
@@ -1880,11 +2015,186 @@ function openDevCardsModal() {
 }
 
 // ========================================================
+// HỆ THỐNG ÂM THANH XÚC XẮC THUẦN (WEB AUDIO API)
+// ========================================================
+
+class DiceSoundEngine {
+  constructor() {
+    this.ctx = null;
+  }
+
+  init() {
+    if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioCtx();
+    }
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
+
+  playRollSound() {
+    try {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      // Nhịp nảy lách cách của 2 viên xúc xắc chạm khay gỗ và chạm vào nhau
+      const tapTimings = [0.0, 0.12, 0.28, 0.45, 0.68, 0.9, 1.1];
+      tapTimings.forEach((t, i) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(750 + Math.random() * 450, now + t);
+        filter.Q.setValueAtTime(3.5, now + t);
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(220 + Math.random() * 90, now + t);
+        osc.frequency.exponentialRampToValueAtTime(70, now + t + 0.04);
+
+        const decayTime = (i === tapTimings.length - 1) ? 0.08 : 0.045;
+        const vol = (1 - (i / tapTimings.length) * 0.45) * 0.28;
+        gain.gain.setValueAtTime(vol, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + t + decayTime);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now + t);
+        osc.stop(now + t + decayTime + 0.01);
+      });
+    } catch {
+      // Bỏ qua nếu trình duyệt chặn Autoplay Audio
+    }
+  }
+}
+
+const diceAudio = new DiceSoundEngine();
+
+// ========================================================
+// HỆ THỐNG XÚC XẮC 3D CATAN (CSS 3D REALISTIC ENGINE)
+// ========================================================
+
+const DICE_FACE_ANGLES = {
+  1: { x: 0, y: 0 },
+  2: { x: -90, y: 0 },
+  3: { x: 0, y: -90 },
+  4: { x: 0, y: 90 },
+  5: { x: 90, y: 0 },
+  6: { x: 0, y: 180 }
+};
+
+const dice3DState = {
+  rotations: {
+    die1: { x: 0, y: 0 },
+    die2: { x: 0, y: 0 }
+  }
+};
+
+function triggerPreRollAnimation() {
+  diceAudio.playRollSound();
+
+  if (dieWrapper1) {
+    dieWrapper1.classList.remove('rolling');
+    void dieWrapper1.offsetWidth;
+    dieWrapper1.classList.add('rolling');
+  }
+  if (dieWrapper2) {
+    dieWrapper2.classList.remove('rolling');
+    void dieWrapper2.offsetWidth;
+    dieWrapper2.classList.add('rolling');
+  }
+
+  if (diceScoreText) {
+    diceScoreText.textContent = '🎲 Đang gieo...';
+  }
+  if (diceScoreBanner) {
+    diceScoreBanner.className = 'dice-score-banner';
+  }
+}
+
+function render3DDiceResult(val1, val2, animate = true) {
+  if (!val1 || !val2 || !diceCube1 || !diceCube2) return;
+
+  const v1 = Math.max(1, Math.min(6, parseInt(val1, 10)));
+  const v2 = Math.max(1, Math.min(6, parseInt(val2, 10)));
+  const sum = v1 + v2;
+
+  const target1 = DICE_FACE_ANGLES[v1] || { x: 0, y: 0 };
+  const target2 = DICE_FACE_ANGLES[v2] || { x: 0, y: 0 };
+
+  if (animate) {
+    sound.playDice();
+    diceAudio.playRollSound();
+
+    if (dieWrapper1) {
+      dieWrapper1.classList.remove('rolling');
+      void dieWrapper1.offsetWidth;
+      dieWrapper1.classList.add('rolling');
+    }
+    if (dieWrapper2) {
+      dieWrapper2.classList.remove('rolling');
+      void dieWrapper2.offsetWidth;
+      dieWrapper2.classList.add('rolling');
+    }
+
+    // Tích lũy 3 vòng quay trọn vẹn (1080deg) để luôn quay xuôi mượt mà
+    const extraSpins = 1080;
+
+    dice3DState.rotations.die1.x = Math.ceil(dice3DState.rotations.die1.x / 360) * 360 + extraSpins + target1.x;
+    dice3DState.rotations.die1.y = Math.ceil(dice3DState.rotations.die1.y / 360) * 360 + extraSpins + target1.y;
+
+    dice3DState.rotations.die2.x = Math.ceil(dice3DState.rotations.die2.x / 360) * 360 + extraSpins + target2.x;
+    dice3DState.rotations.die2.y = Math.ceil(dice3DState.rotations.die2.y / 360) * 360 + extraSpins + target2.y;
+
+    diceCube1.style.transform = `rotateX(${dice3DState.rotations.die1.x}deg) rotateY(${dice3DState.rotations.die1.y}deg)`;
+    diceCube2.style.transform = `rotateX(${dice3DState.rotations.die2.x}deg) rotateY(${dice3DState.rotations.die2.y}deg)`;
+
+    // Cập nhật banner điểm sau khi xúc xắc dừng
+    setTimeout(() => {
+      updateDiceScoreBanner(sum, v1, v2);
+    }, 1100);
+  } else {
+    // Không animate: đặt góc trực tiếp
+    dice3DState.rotations.die1.x = target1.x;
+    dice3DState.rotations.die1.y = target1.y;
+    dice3DState.rotations.die2.x = target2.x;
+    dice3DState.rotations.die2.y = target2.y;
+
+    diceCube1.style.transform = `rotateX(${target1.x}deg) rotateY(${target1.y}deg)`;
+    diceCube2.style.transform = `rotateX(${target2.x}deg) rotateY(${target2.y}deg)`;
+
+    updateDiceScoreBanner(sum, v1, v2);
+  }
+}
+
+function updateDiceScoreBanner(sum, v1, v2) {
+  if (!diceScoreBanner || !diceScoreText) return;
+
+  diceScoreBanner.classList.remove('score-pop', 'is-seven', 'is-red-token');
+  void diceScoreBanner.offsetWidth;
+  diceScoreBanner.classList.add('score-pop');
+
+  if (sum === 7) {
+    diceScoreBanner.classList.add('is-seven');
+    diceScoreText.innerHTML = `⚠️ Tên cướp (7) &bull; <small>(${v1} + ${v2})</small>`;
+  } else if (sum === 6 || sum === 8) {
+    diceScoreBanner.classList.add('is-red-token');
+    diceScoreText.innerHTML = `⭐ Tổng: ${sum} &bull; <small>(${v1} + ${v2})</small>`;
+  } else {
+    diceScoreText.innerHTML = `🎲 Tổng: ${sum} &bull; <small>(${v1} + ${v2})</small>`;
+  }
+}
+
+// ========================================================
 // HÀNH ĐỘNG GIEO XÚC XẮC CHUNG
 // ========================================================
 
 async function handleRollDiceAction() {
   btnRollDice.disabled = true;
+  triggerPreRollAnimation();
   try {
     const res = await emitAsync('game:roll_dice');
     if (!res.success) alert(res.error);
@@ -1900,8 +2210,31 @@ async function handleRollDiceAction() {
 function renderPlayerSlots(room) {
   if (!room || !room.players) return;
 
+  state.room = room;
   playerCount.textContent = room.players.length;
   playerList.innerHTML = '';
+
+  const isHost = room.hostId === state.playerId;
+  state.isHost = isHost;
+
+  // Cập nhật trạng thái bản đồ và quyền điều khiển map của chủ phòng trong sảnh chờ
+  const isRandom = room.boardMode === 'RANDOM';
+  if (lobbyBoardBadge) {
+    lobbyBoardBadge.textContent = isRandom ? '🎲 Bản đồ Ngẫu nhiên' : '🗺️ Bản đồ Tiêu chuẩn';
+    lobbyBoardBadge.classList.toggle('random-mode', isRandom);
+  }
+  if (lobbyHostMapActions) {
+    lobbyHostMapActions.style.display = isHost ? 'flex' : 'none';
+  }
+
+  const availableColors = room.availableColors || [
+    { name: 'Đỏ', hex: '#e74c3c' },
+    { name: 'Xanh dương', hex: '#3498db' },
+    { name: 'Cam', hex: '#e67e22' },
+    { name: 'Trắng', hex: '#ecf0f1' },
+    { name: 'Xanh lá', hex: '#2ecc71' },
+    { name: 'Tím', hex: '#9b59b6' }
+  ];
 
   for (let i = 0; i < 4; i++) {
     const player = room.players[i];
@@ -1910,13 +2243,73 @@ function renderPlayerSlots(room) {
     if (player) {
       const isMe = player.id === state.playerId;
       slot.className = `player-slot ${isMe ? 'me' : ''}`;
+
+      let colorPickerHtml = '';
+      if (isMe) {
+        const otherPlayerHexes = room.players
+          .filter(p => p.id !== player.id)
+          .map(p => p.color?.hex?.toLowerCase());
+
+        const swatchesHtml = availableColors.map(c => {
+          const isSelected = player.color?.hex?.toLowerCase() === c.hex.toLowerCase();
+          const isTaken = otherPlayerHexes.includes(c.hex.toLowerCase());
+          const title = isSelected
+            ? `Màu hiện tại của bạn: ${c.name}`
+            : (isTaken ? `Đã có người chơi khác chọn màu ${c.name}` : `Đổi sang màu ${c.name}`);
+
+          return `
+            <span class="color-swatch-item ${isSelected ? 'active' : ''} ${isTaken ? 'disabled' : ''}"
+                  style="background-color: ${c.hex};"
+                  data-color-hex="${c.hex}"
+                  title="${escapeHtml(title)}">
+              ${isSelected ? '✓' : ''}
+            </span>
+          `;
+        }).join('');
+
+        colorPickerHtml = `
+          <div class="player-color-picker-box">
+            <span class="color-picker-title">Đổi màu quân của bạn:</span>
+            <div class="color-swatches-row">
+              ${swatchesHtml}
+            </div>
+          </div>
+        `;
+      }
+
       slot.innerHTML = `
-        <span class="player-color-dot" style="background-color: ${player.color?.hex || '#999'}"></span>
-        <div class="player-info">
-          <span class="player-name">${escapeHtml(player.name)} ${isMe ? '(Bạn)' : ''}</span>
-          <span class="player-role">${player.isHost ? '★ Chủ phòng' : 'Người chơi'}</span>
+        <div class="player-slot-main">
+          <span class="player-color-dot" style="background-color: ${player.color?.hex || '#999'}"></span>
+          <div class="player-info">
+            <span class="player-name">${escapeHtml(player.name)} ${isMe ? '(Bạn)' : ''}</span>
+            <span class="player-role">${player.isHost ? '★ Chủ phòng' : 'Người chơi'}</span>
+          </div>
         </div>
+        ${colorPickerHtml}
       `;
+
+      if (isMe) {
+        slot.querySelectorAll('.color-swatch-item:not(.disabled):not(.active)').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const colorHex = btn.getAttribute('data-color-hex');
+            try {
+              sound.play('click');
+              const res = await emitAsync('room:change_color', { colorHex });
+              if (!res.success) {
+                sound.playFail();
+                alert(res.error);
+              } else {
+                sound.playSuccess();
+                addLog(`Bạn đã đổi màu sang ${res.player?.color?.name || colorHex}`, 'info');
+              }
+            } catch (err) {
+              sound.playFail();
+              alert(err.message);
+            }
+          });
+        });
+      }
     } else {
       slot.className = 'player-slot empty';
       slot.innerHTML = `<span>+ Đang chờ người chơi...</span>`;
@@ -1924,9 +2317,6 @@ function renderPlayerSlots(room) {
 
     playerList.appendChild(slot);
   }
-
-  const isHost = room.hostId === state.playerId;
-  state.isHost = isHost;
 
   // Đồng bộ đầy đủ 4 vị trí người chơi lên bàn cờ
   renderLobbyPlayersOnBoard(room);
@@ -1938,12 +2328,13 @@ function renderPlayerSlots(room) {
       waitingNote.style.color = '#2ecc71';
     } else {
       btnStartGame.disabled = true;
-      waitingNote.textContent = 'Cần ít nhất 2 người chơi để bắt đầu (khuyên dùng 3–4 người).';
+      waitingNote.textContent = 'Cần ít nhất 2 người chơi để bắt đầu (khuyên dùng 3–4 người). Bạn có thể đổi màu hoặc random map.';
       waitingNote.style.color = '';
     }
   } else {
     btnStartGame.disabled = true;
-    waitingNote.textContent = 'Chỉ có chủ phòng mới có thể bắt đầu trò chơi.';
+    waitingNote.textContent = 'Chỉ có chủ phòng mới có thể bắt đầu trò chơi và đổi bản đồ.';
+    waitingNote.style.color = '';
   }
 }
 
@@ -1969,6 +2360,11 @@ function showJoinView() {
   lobbySection.classList.remove('hidden');
   roomCard.classList.add('hidden');
   joinCard.classList.remove('hidden');
+
+  if (lobbyBoardBadge) {
+    lobbyBoardBadge.textContent = '🗺️ Bản đồ Tiêu chuẩn';
+    lobbyBoardBadge.classList.remove('random-mode');
+  }
 
   // Đặt lại 4 vị trí người chơi tiêu chuẩn trên bàn cờ
   renderLeftPlayersPanel(null);
@@ -2008,6 +2404,11 @@ async function init() {
       if (savedSession) {
         try {
           const sess = JSON.parse(savedSession);
+          if (sess.playerId) state.playerId = sess.playerId;
+          if (sess.playerName) state.playerName = sess.playerName;
+          if (sess.roomId) state.roomId = sess.roomId;
+          if (sess.sessionToken) state.sessionToken = sess.sessionToken;
+
           if (sess.roomId && sess.sessionToken) {
             emitAsync('player:reconnect', { roomId: sess.roomId, sessionToken: sess.sessionToken })
               .then(res => {
@@ -2016,11 +2417,33 @@ async function init() {
                   state.playerName = res.player.name;
                   state.isHost = res.player.isHost;
                   state.sessionToken = res.player.sessionToken;
-                  showRoomView(res.room);
+                  saveSession();
+
+                  const isGameActive = Boolean(
+                    res.room?.status === 'PLAYING' ||
+                    state.gameState ||
+                    (res.room?.status && res.room.status !== 'WAITING')
+                  );
+
+                  if (isGameActive) {
+                    document.body.classList.add('in-game-mode');
+                    lobbySection.classList.add('hidden');
+                    if (state.gameState) {
+                      updateGameHud(state.gameState);
+                    }
+                  } else {
+                    showRoomView(res.room);
+                  }
                   addLog(`Đã khôi phục thành công phiên chơi phòng [${res.room.id}]!`, 'success');
+                } else {
+                  clearSession();
+                  showJoinView();
                 }
               })
-              .catch(() => clearSession());
+              .catch(() => {
+                clearSession();
+                showJoinView();
+              });
           }
         } catch {
           clearSession();
@@ -2061,6 +2484,113 @@ async function init() {
   });
   btnZoomReset.addEventListener('click', () => {
     state.boardRenderer?.resetZoom();
+  });
+
+  // 4B. Hệ thống Điều Chỉnh Âm Lượng (Volume Sliders, Mute & Presets)
+  const btnToggleSoundHeader = document.getElementById('btnToggleSoundHeader');
+  const btnToggleSoundBoard = document.getElementById('btnToggleSoundBoard');
+  const soundIconHeader = document.getElementById('soundIconHeader');
+  const soundTextHeader = document.getElementById('soundTextHeader');
+  const headerVolumePopover = document.getElementById('headerVolumePopover');
+  const boardVolumePopover = document.getElementById('boardVolumePopover');
+
+  const volumeSliderHeader = document.getElementById('volumeSliderHeader');
+  const volumeSliderBoard = document.getElementById('volumeSliderBoard');
+  const volumePercentHeader = document.getElementById('volumePercentHeader');
+  const volumePercentBoard = document.getElementById('volumePercentBoard');
+  const btnQuickMuteHeader = document.getElementById('btnQuickMuteHeader');
+  const btnQuickMuteBoard = document.getElementById('btnQuickMuteBoard');
+
+  let testSoundDebounce = null;
+
+  function updateSoundUI({ muted, volume }) {
+    const isMuted = Boolean(muted || (volume !== undefined && volume <= 0.001));
+    const currentVol = (volume !== undefined) ? volume : sound.getVolume();
+    const volPercent = Math.round(currentVol * 100);
+    const icon = isMuted ? '🔇' : (volPercent < 35 ? '🔈' : (volPercent < 70 ? '🔉' : '🔊'));
+
+    if (soundIconHeader) soundIconHeader.textContent = icon;
+    if (soundTextHeader) soundTextHeader.textContent = isMuted ? 'Tắt tiếng' : `${volPercent}%`;
+
+    if (btnToggleSoundHeader) {
+      btnToggleSoundHeader.classList.toggle('muted', isMuted);
+    }
+    if (btnToggleSoundBoard) {
+      btnToggleSoundBoard.textContent = icon;
+      btnToggleSoundBoard.classList.toggle('muted', isMuted);
+    }
+
+    if (btnQuickMuteHeader) btnQuickMuteHeader.textContent = icon;
+    if (btnQuickMuteBoard) btnQuickMuteBoard.textContent = icon;
+
+    if (volumeSliderHeader) {
+      volumeSliderHeader.value = isMuted ? 0 : volPercent;
+    }
+    if (volumeSliderBoard) {
+      volumeSliderBoard.value = isMuted ? 0 : volPercent;
+    }
+
+    if (volumePercentHeader) {
+      volumePercentHeader.textContent = isMuted ? '0%' : `${volPercent}%`;
+    }
+    if (volumePercentBoard) {
+      volumePercentBoard.textContent = isMuted ? '0%' : `${volPercent}%`;
+    }
+
+    // Cập nhật trạng thái active của các nút preset
+    document.querySelectorAll('.btn-vol-preset').forEach(btn => {
+      const presetVal = parseInt(btn.getAttribute('data-vol'), 10);
+      btn.classList.toggle('active', !isMuted && Math.abs(presetVal - volPercent) <= 5);
+    });
+  }
+
+  sound.onChange(updateSoundUI);
+  updateSoundUI({ muted: sound.isMuted(), volume: sound.getVolume() });
+
+  // Nhấp nút chính: Bật / Tắt tiếng nhanh
+  btnToggleSoundHeader?.addEventListener('click', () => {
+    sound.toggleMute();
+    sound.playBop();
+  });
+
+  btnToggleSoundBoard?.addEventListener('click', () => {
+    sound.toggleMute();
+    sound.playBop();
+  });
+
+  btnQuickMuteHeader?.addEventListener('click', () => {
+    sound.toggleMute();
+    sound.playBop();
+  });
+
+  btnQuickMuteBoard?.addEventListener('click', () => {
+    sound.toggleMute();
+    sound.playBop();
+  });
+
+  // Kéo thanh trượt âm lượng
+  function handleSliderInput(e) {
+    const val = parseInt(e.target.value, 10);
+    sound.setVolume(val / 100);
+
+    // Phát tiếng bop nhẹ test âm lượng tức thời (debounced 150ms)
+    clearTimeout(testSoundDebounce);
+    testSoundDebounce = setTimeout(() => {
+      sound.playBop();
+    }, 150);
+  }
+
+  volumeSliderHeader?.addEventListener('input', handleSliderInput);
+  volumeSliderBoard?.addEventListener('input', handleSliderInput);
+
+  // Các nút chọn mức âm lượng nhanh (0%, 30%, 65%, 100%)
+  document.querySelectorAll('.btn-vol-preset').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = parseInt(btn.getAttribute('data-vol'), 10);
+      sound.setVolume(val / 100);
+      sound.playBop();
+    });
   });
 
   // 5. Thu gọn và Mở rộng Túi Thẻ của người chơi (Collapse & Expand Hand)
@@ -2187,7 +2717,7 @@ async function init() {
     showJoinView();
   });
 
-  btnCopyInvite.addEventListener('click', async () => {
+    btnCopyInvite.addEventListener('click', async () => {
     if (!state.roomId) return;
     const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${state.roomId}`;
     try {
@@ -2199,12 +2729,58 @@ async function init() {
     }
   });
 
+  // Tùy chọn đổi bản đồ trong sảnh chờ (Dành cho chủ phòng)
+  btnLobbyRandomBoard?.addEventListener('click', async () => {
+    btnLobbyRandomBoard.disabled = true;
+    sound.play('click');
+    try {
+      const res = await emitAsync('room:randomize_board');
+      if (!res.success) {
+        sound.playFail();
+        alert(res.error);
+      } else {
+        sound.playSuccess();
+        addLog('Chủ phòng đã sinh Bản đồ ngẫu nhiên mới!', 'event');
+      }
+    } catch (err) {
+      sound.playFail();
+      alert(err.message);
+    } finally {
+      btnLobbyRandomBoard.disabled = false;
+    }
+  });
+
+  btnLobbyStandardBoard?.addEventListener('click', async () => {
+    btnLobbyStandardBoard.disabled = true;
+    sound.play('click');
+    try {
+      const res = await emitAsync('room:standard_board');
+      if (!res.success) {
+        sound.playFail();
+        alert(res.error);
+      } else {
+        sound.playSuccess();
+        addLog('Chủ phòng đã đặt lại Bản đồ tiêu chuẩn!', 'event');
+      }
+    } catch (err) {
+      sound.playFail();
+      alert(err.message);
+    } finally {
+      btnLobbyStandardBoard.disabled = false;
+    }
+  });
+
   btnStartGame.addEventListener('click', async () => {
     btnStartGame.disabled = true;
+    sound.play('start-end');
     try {
       const res = await emitAsync('game:start');
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        sound.playFail();
+        alert(res.error);
+      }
     } catch (err) {
+      sound.playFail();
       alert(err.message);
     } finally {
       btnStartGame.disabled = false;
@@ -2213,13 +2789,23 @@ async function init() {
 
   // 8. Xúc xắc & Kết thúc lượt
   btnRollDice.addEventListener('click', handleRollDiceAction);
+  document.getElementById('diceTray')?.addEventListener('click', () => {
+    if (!btnRollDice.disabled) {
+      handleRollDiceAction();
+    }
+  });
 
   btnEndTurn.addEventListener('click', async () => {
     btnEndTurn.disabled = true;
+    sound.playBop();
     try {
       const res = await emitAsync('game:end_turn');
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        sound.playFail();
+        alert(res.error);
+      }
     } catch (err) {
+      sound.playFail();
       alert(err.message);
     } finally {
       btnEndTurn.disabled = false;
@@ -2229,9 +2815,15 @@ async function init() {
   btnBuyDevCard?.addEventListener('click', async () => {
     try {
       const res = await emitAsync('game:buy_dev_card');
-      if (!res.success) alert(res.error);
-      else addLog('Bạn đã mua 1 thẻ phát triển bí mật!', 'success');
+      if (!res.success) {
+        sound.playFail();
+        alert(res.error);
+      } else {
+        sound.playCardDraw();
+        addLog('Bạn đã mua 1 thẻ phát triển bí mật!', 'success');
+      }
     } catch (err) {
+      sound.playFail();
       alert(err.message);
     }
   });
