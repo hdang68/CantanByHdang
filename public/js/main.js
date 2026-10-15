@@ -217,6 +217,10 @@ const tradeProposalReceiveCards = document.getElementById('tradeProposalReceiveC
 const btnAcceptTradeProposal = document.getElementById('btnAcceptTradeProposal');
 const btnRejectTradeProposal = document.getElementById('btnRejectTradeProposal');
 
+// Modal: Steal Resource
+const modalSteal = document.getElementById('modalSteal');
+const stealVictimsList = document.getElementById('stealVictimsList');
+
 // Modal 3: Discard Resources
 const modalDiscard = document.getElementById('modalDiscard');
 const discardRequiredCount = document.getElementById('discardRequiredCount');
@@ -334,7 +338,8 @@ function renderBoard(boardData) {
     onPortClick: (port) => handleBoardPortClick(port),
     onBuildingPlaced: (type) => sound.playBuild(type),
     onRoadPlaced: () => sound.playBuild('road'),
-    onRobberMoved: () => sound.playRobber()
+    onRobberMoved: () => sound.playRobber(),
+    onRobberClicked: () => addLog('Hãy bấm hoặc kéo Tên cướp vào một ô lục giác khác để di chuyển!', 'info')
   });
 }
 
@@ -471,36 +476,82 @@ async function handleBoardHexClick(hexId) {
 
   // Di chuyển Tên cướp
   if (phase === 'TURN_ROBBER_MOVE' && isMyTurn) {
+    const currentRobberHex = state.board?.robberHexId || state.gameState?.board?.robberHexId;
+    if (currentRobberHex === hexId) {
+      addLog('Tên cướp bắt buộc phải được chuyển sang một ô địa hình khác!', 'warning');
+      return;
+    }
     try {
       const res = await emitAsync('game:move_robber', { hexId });
       if (!res.success) {
-        alert(res.error);
+        addLog(res.error || 'Không thể di chuyển Tên cướp đến ô này.', 'error');
       } else if (res.mustSteal && res.victims && res.victims.length > 0) {
-        promptStealVictim(res.victims);
+        openStealModal(res.victims);
       }
     } catch (err) {
       addLog(err.message, 'error');
     }
-  }
-}
-
-function promptStealVictim(victims) {
-  if (victims.length === 1) {
-    emitAsync('game:steal', { targetPlayerId: victims[0].id }).catch(e => addLog(e.message, 'error'));
     return;
   }
 
-  let promptText = 'Chọn đối thủ kề bên để cướp ngẫu nhiên 1 tài nguyên:\n';
-  victims.forEach((v, idx) => {
-    promptText += `${idx + 1}. ${v.name}\n`;
+  // Nếu người chơi bấm vào ô khi đang chờ bỏ bài ra 7
+  if (phase === 'TURN_ROBBER_DISCARD' && isMyTurn) {
+    const pendingNames = Object.keys(state.gameState.pendingDiscards || {})
+      .map(pId => state.gameState.players[pId]?.name || 'Đối thủ')
+      .join(', ');
+    addLog(`Chưa thể di chuyển Tên cướp: Vui lòng đợi [${pendingNames}] hoàn tất bỏ bài ra 7!`, 'warning');
+    return;
+  }
+}
+
+function openStealModal(victims) {
+  if (!modalSteal || !stealVictimsList) return;
+  if (!victims || victims.length === 0) {
+    modalSteal.classList.add('hidden');
+    return;
+  }
+
+  // Nếu chỉ có đúng 1 nạn nhân hợp lệ, tự động cướp luôn để không tốn thao tác
+  if (victims.length === 1) {
+    emitAsync('game:steal', { targetPlayerId: victims[0].id })
+      .then(res => {
+        if (!res.success && res.error) addLog(res.error, 'error');
+      })
+      .catch(e => addLog(e.message, 'error'));
+    modalSteal.classList.add('hidden');
+    return;
+  }
+
+  stealVictimsList.innerHTML = '';
+  victims.forEach(v => {
+    const item = document.createElement('div');
+    item.className = 'steal-victim-item';
+    const colorHex = (typeof v.color === 'string' ? v.color : v.color?.hex) || '#e74c3c';
+    const cardText = v.totalResourceCount !== undefined ? `${v.totalResourceCount} thẻ trên tay` : 'Có tài nguyên';
+
+    item.innerHTML = `
+      <div class="victim-badge" style="background-color: ${escapeHtml(colorHex)}"></div>
+      <div class="victim-info">
+        <span class="victim-name">${escapeHtml(v.name)}</span>
+        <span class="victim-cards">${escapeHtml(cardText)}</span>
+      </div>
+      <button class="btn btn-sm btn-primary btn-steal-target">Cướp thẻ</button>
+    `;
+
+    item.addEventListener('click', async () => {
+      modalSteal.classList.add('hidden');
+      try {
+        const res = await emitAsync('game:steal', { targetPlayerId: v.id });
+        if (!res.success && res.error) addLog(res.error, 'error');
+      } catch (err) {
+        addLog(err.message, 'error');
+      }
+    });
+
+    stealVictimsList.appendChild(item);
   });
 
-  const choice = prompt(promptText, '1');
-  const chosenIdx = parseInt(choice, 10) - 1;
-
-  if (victims[chosenIdx]) {
-    emitAsync('game:steal', { targetPlayerId: victims[chosenIdx].id }).catch(e => addLog(e.message, 'error'));
-  }
+  modalSteal.classList.remove('hidden');
 }
 
 // ========================================================
@@ -582,16 +633,47 @@ function updateGameHud(gameState) {
 
   // Duy trì hào quang phát sáng nhẹ cho Tên cướp trong suốt giai đoạn cướp bóc
   const isRobberPhase = Boolean(gameState.phase && gameState.phase.startsWith('TURN_ROBBER_'));
+  const canMoveRobber = isMyTurn && (gameState.phase === 'TURN_ROBBER_MOVE');
+
   if (isRobberPhase) {
     if (isNewRoll) {
       setTimeout(() => {
         state.boardRenderer?.setRobberGlowing(true);
+        state.boardRenderer?.setRobberInteractive(canMoveRobber);
+        state.boardRenderer?.setRobberTargetHighlight(canMoveRobber);
       }, 1180);
     } else {
       state.boardRenderer?.setRobberGlowing(true);
+      state.boardRenderer?.setRobberInteractive(canMoveRobber);
+      state.boardRenderer?.setRobberTargetHighlight(canMoveRobber);
     }
   } else if (gameState.phase === 'TURN_MAIN' || gameState.phase === 'TURN_ROLL') {
     state.boardRenderer?.setRobberGlowing(false);
+    state.boardRenderer?.setRobberInteractive(false);
+    state.boardRenderer?.setRobberTargetHighlight(false);
+  }
+
+  // Cập nhật thông điệp trạng thái lượt trên Widget xúc xắc
+  if (diceScoreText) {
+    if (gameState.phase === 'TURN_ROBBER_DISCARD') {
+      const req = gameState.pendingDiscards?.[state.playerId];
+      if (req && req > 0) {
+        diceScoreText.innerHTML = `⚠️ Ra 7: Bạn cần bỏ ${req} thẻ!`;
+      } else {
+        const pendingNames = Object.keys(gameState.pendingDiscards || {})
+          .map(pId => gameState.players[pId]?.name || 'Đối thủ')
+          .join(', ');
+        diceScoreText.innerHTML = `⏳ Đang chờ [${pendingNames}] bỏ bài...`;
+      }
+    } else if (gameState.phase === 'TURN_ROBBER_MOVE') {
+      diceScoreText.innerHTML = isMyTurn
+        ? '🗡️ Lượt bạn: Hãy chọn/kéo Tên cướp!'
+        : `🗡️ ${activePlayer?.name || 'Đối thủ'} đang di chuyển Tên cướp...`;
+    } else if (gameState.phase === 'TURN_ROBBER_STEAL') {
+      diceScoreText.innerHTML = isMyTurn
+        ? '🗡️ Lượt bạn: Chọn đối thủ để cướp!'
+        : `🗡️ ${activePlayer?.name || 'Đối thủ'} đang cướp tài nguyên...`;
+    }
   }
 
   const canRoll = isMyTurn && (gameState.phase === 'TURN_ROLL');
@@ -818,6 +900,23 @@ function updateGameHud(gameState) {
     }
   } else {
     modalDiscard.classList.add('hidden');
+  }
+
+  // 10B. Modal Cướp tài nguyên (TURN_ROBBER_STEAL)
+  if (gameState.phase === 'TURN_ROBBER_STEAL') {
+    if (isMyTurn) {
+      const rawVictims = gameState.eligibleStealVictims || [];
+      if (rawVictims.length > 0) {
+        const fullVictims = rawVictims.map(v => typeof v === 'object' ? v : (gameState.players[v] || { id: v, name: 'Người chơi' }));
+        openStealModal(fullVictims);
+      } else {
+        modalSteal?.classList.add('hidden');
+      }
+    } else {
+      modalSteal?.classList.add('hidden');
+    }
+  } else {
+    modalSteal?.classList.add('hidden');
   }
 
   // 11. Modal Chiến thắng
@@ -1653,6 +1752,16 @@ function setupDragAndDrop() {
       }
     }
 
+    // A2. Thả Tên cướp lên ô lục giác
+    if (type === 'robber') {
+      const elementsUnder = document.elementsFromPoint(e.clientX, e.clientY);
+      const hElem = elementsUnder.find(el => el.closest && el.closest('.hex-item'));
+      const hexId = hElem?.closest('.hex-item')?.getAttribute('data-hex-id');
+      if (hexId) {
+        handleBoardHexClick(hexId);
+      }
+    }
+
     // B. Thả thẻ phát triển ra giữa bàn cờ để đánh (Ví dụ: Hiệp sĩ, Bội thu, Độc quyền)
     if (type === 'dev_card') {
       if (cardType === 'knight') {
@@ -1924,12 +2033,16 @@ function openDiscardModal(requiredCount, myResources) {
   currentDiscardRequired = requiredCount;
   discardRequiredCount.textContent = requiredCount;
 
+  const isAlreadyOpen = !modalDiscard.classList.contains('hidden');
+
   ['wood', 'clay', 'sheep', 'wheat', 'ore'].forEach(r => {
-    discardState[r] = 0;
+    if (!isAlreadyOpen) {
+      discardState[r] = 0;
+    }
     const maxEl = document.getElementById(`discardMax${capitalize(r)}`);
     const valEl = document.getElementById(`discardVal${capitalize(r)}`);
     if (maxEl) maxEl.textContent = myResources[r] || 0;
-    if (valEl) valEl.textContent = '0';
+    if (valEl) valEl.textContent = discardState[r] || 0;
   });
 
   updateDiscardUI();

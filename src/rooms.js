@@ -171,6 +171,16 @@ export function leaveRoom(roomId, socketId) {
   } else {
     // Nếu đang chơi thì chỉ đánh dấu mất kết nối, giữ nguyên slot và quân cờ
     removedPlayer.connected = false;
+
+    // Nếu người chơi ngắt kết nối khi đang phải bỏ bài ra 7, tự động bỏ bài để không làm treo ván chơi của cả phòng
+    if (room.engine) {
+      if (room.engine.phase === 'TURN_ROBBER_DISCARD' && room.engine.pendingDiscards?.[removedPlayer.id]) {
+        room.engine.autoDiscardForPlayer(removedPlayer.id);
+      }
+      if (room.engine.phase === 'TURN_ROBBER_STEAL') {
+        room.engine.checkAndAdvanceFromSteal();
+      }
+    }
   }
 
   return { room, removedPlayer };

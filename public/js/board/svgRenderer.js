@@ -42,6 +42,8 @@ export class SvgBoardRenderer {
     this.portElements = new Map();
     this.robberElement = null;
     this.isRobberGlowing = false;
+    this.isRobberInteractive = false;
+    this.isHighlightingRobberTargets = false;
 
     // Chụp lại trạng thái bàn cờ ban đầu để phát hiện công trình mới
     this.lastBoardSnapshot = {
@@ -321,10 +323,13 @@ export class SvgBoardRenderer {
       texturePolygon.setAttribute('stroke-width', '4');
       texturePolygon.style.cursor = 'pointer';
 
-      texturePolygon.addEventListener('click', () => {
+      const handleHexClick = (e) => {
         if (this.hasDragged) return;
         if (this.options.onHexClick) this.options.onHexClick(hex.id);
-      });
+      };
+
+      texturePolygon.addEventListener('click', handleHexClick);
+      hexElem.addEventListener('click', handleHexClick);
 
       hexElem.appendChild(texturePolygon);
 
@@ -364,7 +369,14 @@ export class SvgBoardRenderer {
       tokenGroup.setAttribute('class', 'number-token');
       tokenGroup.setAttribute('data-dice-number', String(hex.diceNumber));
       tokenGroup.setAttribute('data-hex-id', hex.id);
-      tokenGroup.setAttribute('pointer-events', 'none');
+      tokenGroup.style.cursor = 'pointer';
+
+      // Chuyển tiếp click từ Thẻ số vào ô Lục giác chứa nó
+      tokenGroup.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.hasDragged) return;
+        if (this.options.onHexClick) this.options.onHexClick(hex.id);
+      });
 
       // Vòng tròn parchment
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -418,7 +430,7 @@ export class SvgBoardRenderer {
   renderRobber() {
     const robberGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     robberGroup.setAttribute('id', 'robberPiece');
-    robberGroup.setAttribute('class', `robber-piece panzoom-exclude ${this.isRobberGlowing ? 'robber-glowing' : ''}`);
+    robberGroup.setAttribute('class', `robber-piece panzoom-exclude ${this.isRobberGlowing ? 'robber-glowing' : ''} ${this.isRobberInteractive ? 'robber-interactive' : ''}`);
 
     // Tìm hex đang chứa Robber
     const robberHex = Object.values(this.board.hexes).find(h => h.hasRobber);
@@ -441,7 +453,59 @@ export class SvgBoardRenderer {
       <!-- Đầu quân cướp -->
       <circle class="robber-head-shape" cx="${center.x}" cy="${center.y - 9}" r="5" fill="#34495e"/>
     `;
-    robberGroup.style.pointerEvents = 'none';
+    robberGroup.style.pointerEvents = this.isRobberInteractive ? 'auto' : 'none';
+
+    // Cài đặt tương tác Pointer (Drag & Drop hoặc Click vào Tên cướp)
+    let isDragging = false;
+    let dragStart = { x: 0, y: 0 };
+    let hasMoved = false;
+
+    robberGroup.addEventListener('pointerdown', (e) => {
+      if (!this.isRobberInteractive) return;
+      e.stopPropagation();
+      e.preventDefault();
+      isDragging = true;
+      hasMoved = false;
+      dragStart = { x: e.clientX, y: e.clientY };
+      this.setRobberTargetHighlight(true);
+
+      const onPointerMove = (moveEvt) => {
+        if (!isDragging) return;
+        const dist = Math.hypot(moveEvt.clientX - dragStart.x, moveEvt.clientY - dragStart.y);
+        if (dist > 6) hasMoved = true;
+
+        const svgPt = this.screenToSvg(moveEvt.clientX, moveEvt.clientY);
+        const dx = svgPt.x - center.x;
+        const dy = svgPt.y - center.y;
+        robberGroup.setAttribute('transform', `translate(${dx}, ${dy})`);
+      };
+
+      const onPointerUp = (upEvt) => {
+        if (!isDragging) return;
+        isDragging = false;
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        robberGroup.removeAttribute('transform');
+        this.setRobberTargetHighlight(this.isRobberInteractive);
+
+        if (hasMoved) {
+          const svgPt = this.screenToSvg(upEvt.clientX, upEvt.clientY);
+          const targetHexId = this.findClosestHex(svgPt.x, svgPt.y);
+          if (targetHexId && this.options.onHexClick) {
+            this.options.onHexClick(targetHexId);
+          }
+        } else {
+          this.shakeRobber();
+          if (this.options.onRobberClicked) {
+            this.options.onRobberClicked();
+          }
+        }
+      };
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    });
+
     this.svg.appendChild(robberGroup);
     this.robberElement = robberGroup;
   }
@@ -848,7 +912,7 @@ export class SvgBoardRenderer {
       const orig = e.detail?.originalEvent;
       if (orig) {
         const dist = Math.hypot((orig.clientX || 0) - startPoint.x, (orig.clientY || 0) - startPoint.y);
-        if (dist > 4) {
+        if (dist > 10) {
           this.hasDragged = true;
         }
       } else {
@@ -978,6 +1042,74 @@ export class SvgBoardRenderer {
     this.robberElement.classList.remove('robber-awaken');
     void this.robberElement.offsetWidth;
     this.robberElement.classList.add('robber-awaken');
+  }
+
+  /**
+   * Chuyển đổi tọa độ màn hình (Client Pointer) sang tọa độ viewBox SVG
+   */
+  screenToSvg(clientX, clientY) {
+    if (!this.svg || !this.svg.createSVGPoint) return { x: clientX, y: clientY };
+    const pt = this.svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const ctm = this.svg.getScreenCTM();
+    if (ctm) {
+      const svgPt = pt.matrixTransform(ctm.inverse());
+      return { x: svgPt.x, y: svgPt.y };
+    }
+    return { x: clientX, y: clientY };
+  }
+
+  /**
+   * Tìm ô Lục giác gần nhất với tọa độ SVG (khoảng cách tối đa 75px)
+   */
+  findClosestHex(svgX, svgY) {
+    let closestId = null;
+    let minDistance = Infinity;
+    Object.values(this.board.hexes).forEach(hex => {
+      const center = toSvgCoords(hex.center.x, hex.center.y);
+      const dist = Math.hypot(center.x - svgX, center.y - svgY);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestId = hex.id;
+      }
+    });
+    if (minDistance <= 75) return closestId;
+    return null;
+  }
+
+  /**
+   * Bật/tắt chế độ cho phép kéo thả hoặc tương tác trực tiếp trên Tên cướp
+   */
+  setRobberInteractive(enable = true) {
+    this.isRobberInteractive = Boolean(enable);
+    if (!this.robberElement) return;
+
+    if (this.isRobberInteractive) {
+      this.robberElement.style.pointerEvents = 'auto';
+      this.robberElement.classList.add('robber-interactive');
+      this.setRobberGlowing(true);
+    } else {
+      this.robberElement.style.pointerEvents = 'none';
+      this.robberElement.classList.remove('robber-interactive');
+    }
+  }
+
+  /**
+   * Bật/tắt hiệu ứng nổi bật (Golden Aura) cho tất cả ô lục giác có thể đặt Tên cướp
+   */
+  setRobberTargetHighlight(enable = true) {
+    this.isHighlightingRobberTargets = Boolean(enable);
+    const hexElems = this.svg.querySelectorAll('.hex-item');
+    hexElems.forEach(el => {
+      const hexId = el.getAttribute('data-hex-id');
+      const hex = this.board.hexes[hexId];
+      if (enable && hex && !hex.hasRobber) {
+        el.classList.add('hex-robber-target');
+      } else {
+        el.classList.remove('hex-robber-target');
+      }
+    });
   }
 
   /**

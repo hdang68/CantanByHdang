@@ -352,6 +352,51 @@ export class CatanEngine {
     return { success: true };
   }
 
+  autoDiscardForPlayer(playerId) {
+    if (this.phase !== GAME_PHASES.TURN_ROBBER_DISCARD) return { success: false };
+    const required = this.pendingDiscards[playerId];
+    if (required === undefined) return { success: false };
+
+    const player = this.players[playerId];
+    if (!player) {
+      delete this.pendingDiscards[playerId];
+      if (Object.keys(this.pendingDiscards).length === 0) {
+        this.phase = GAME_PHASES.TURN_ROBBER_MOVE;
+        const currentP = this.getCurrentPlayer();
+        this.logEvent(`Tất cả đã hoàn tất bỏ bài. ${currentP.name} hãy di chuyển Tên cướp.`, 'system');
+      }
+      return { success: true };
+    }
+
+    // Tự động chọn ngẫu nhiên các thẻ tài nguyên có sẵn để bỏ
+    const pool = [];
+    for (const [res, count] of Object.entries(player.resources || {})) {
+      for (let i = 0; i < count; i++) pool.push(res);
+    }
+
+    const discarded = { wood: 0, clay: 0, sheep: 0, wheat: 0, ore: 0 };
+    for (let i = 0; i < required && pool.length > 0; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      const picked = pool.splice(idx, 1)[0];
+      discarded[picked] = (discarded[picked] || 0) + 1;
+    }
+
+    return this.discardResources(playerId, discarded);
+  }
+
+  checkAndAdvanceFromSteal() {
+    if (this.phase !== GAME_PHASES.TURN_ROBBER_STEAL) return;
+    this.eligibleStealVictims = (this.eligibleStealVictims || []).filter(v => {
+      const p = this.players[v.id || v];
+      return p && getTotalResourceCount(p.resources) > 0;
+    });
+
+    if (this.eligibleStealVictims.length === 0) {
+      this.phase = this.diceRolledThisTurn ? GAME_PHASES.TURN_MAIN : GAME_PHASES.TURN_ROLL;
+      this.logEvent('Không còn đối thủ hợp lệ để cướp tài nguyên. Tiếp tục lượt chơi.', 'info');
+    }
+  }
+
   moveRobber(playerId, targetHexId) {
     if (this.phase !== GAME_PHASES.TURN_ROBBER_MOVE) {
       return { success: false, error: 'Chưa tới bước di chuyển Tên cướp.' };
@@ -375,9 +420,18 @@ export class CatanEngine {
 
     if (victims.length > 0) {
       this.phase = GAME_PHASES.TURN_ROBBER_STEAL;
-      return { success: true, mustSteal: true, victims: victims.map(v => ({ id: v.id, name: v.name })) };
+      return {
+        success: true,
+        mustSteal: true,
+        victims: victims.map(v => ({
+          id: v.id,
+          name: v.name,
+          color: v.color,
+          totalResourceCount: getTotalResourceCount(v.resources || {})
+        }))
+      };
     } else {
-      this.phase = GAME_PHASES.TURN_MAIN;
+      this.phase = this.diceRolledThisTurn ? GAME_PHASES.TURN_MAIN : GAME_PHASES.TURN_ROLL;
       return { success: true, mustSteal: false };
     }
   }
@@ -393,7 +447,7 @@ export class CatanEngine {
     }
 
     const victim = this.players[victimPlayerId];
-    if (!victim || !this.eligibleStealVictims.some(v => v.id === victimPlayerId)) {
+    if (!victim || !this.eligibleStealVictims.some(v => (v.id || v) === victimPlayerId)) {
       return { success: false, error: 'Đối thủ này không hợp lệ để cướp.' };
     }
 
@@ -411,7 +465,7 @@ export class CatanEngine {
 
     this.logEvent(`${currentP.name} đã cướp 1 thẻ tài nguyên từ ${victim.name}.`, 'warning');
     this.eligibleStealVictims = [];
-    this.phase = GAME_PHASES.TURN_MAIN;
+    this.phase = this.diceRolledThisTurn ? GAME_PHASES.TURN_MAIN : GAME_PHASES.TURN_ROLL;
 
     return {
       success: true,
@@ -832,7 +886,15 @@ export class CatanEngine {
       winnerId: this.winnerId,
       players: playersView,
       pendingDiscards: this.pendingDiscards,
-      eligibleStealVictims: this.eligibleStealVictims.map(v => v.id),
+      eligibleStealVictims: this.eligibleStealVictims.map(v => {
+        const p = this.players[v.id || v] || v;
+        return {
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          totalResourceCount: getTotalResourceCount(p.resources || {})
+        };
+      }),
       lastProduction: this.lastProduction,
       lastProductionId: this.lastProductionId,
       lastSpent: this.lastSpent,
