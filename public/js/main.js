@@ -831,7 +831,22 @@ function updateGameHud(gameState) {
   }
 
   // 6. Các nút hành động
-  btnEndTurn.disabled = !(isMyTurn && gameState.phase === 'TURN_MAIN');
+  const canEndTurn = Boolean(isMyTurn && gameState.phase === 'TURN_MAIN');
+  btnEndTurn.disabled = !canEndTurn;
+  btnEndTurn.classList.toggle('disabled', !canEndTurn);
+
+  if (!isMyTurn) {
+    btnEndTurn.title = 'Đang chờ tới lượt của đối thủ...';
+  } else if (gameState.phase === 'TURN_ROLL') {
+    btnEndTurn.title = 'Bạn cần gieo xúc xắc trước khi kết thúc lượt.';
+  } else if (gameState.phase?.startsWith('TURN_ROBBER_')) {
+    btnEndTurn.title = 'Bạn cần xử lý Tên cướp trước khi kết thúc lượt.';
+  } else if (gameState.phase?.startsWith('SETUP_')) {
+    btnEndTurn.title = 'Đang trong giai đoạn khởi đầu bàn cờ.';
+  } else {
+    btnEndTurn.title = 'Bấm để kết thúc lượt của bạn.';
+  }
+
   if (btnBuyDevCard) {
     btnBuyDevCard.disabled = !(isMyTurn && gameState.phase === 'TURN_MAIN');
   }
@@ -2909,19 +2924,32 @@ async function init() {
   });
 
   btnEndTurn.addEventListener('click', async () => {
+    const isMyTurn = (state.gameState?.currentTurnPlayerId === state.playerId);
+    const phase = state.gameState?.phase;
+    if (!isMyTurn || phase !== 'TURN_MAIN' || btnEndTurn.disabled) {
+      return;
+    }
+
     btnEndTurn.disabled = true;
+    btnEndTurn.classList.add('disabled');
     sound.playBop();
     try {
       const res = await emitAsync('game:end_turn');
       if (!res.success) {
         sound.playFail();
-        alert(res.error);
+        if (res.error) addLog(res.error, 'error');
+        if (state.gameState?.currentTurnPlayerId === state.playerId && state.gameState?.phase === 'TURN_MAIN') {
+          btnEndTurn.disabled = false;
+          btnEndTurn.classList.remove('disabled');
+        }
       }
     } catch (err) {
       sound.playFail();
-      alert(err.message);
-    } finally {
-      btnEndTurn.disabled = false;
+      if (err.message) addLog(err.message, 'error');
+      if (state.gameState?.currentTurnPlayerId === state.playerId && state.gameState?.phase === 'TURN_MAIN') {
+        btnEndTurn.disabled = false;
+        btnEndTurn.classList.remove('disabled');
+      }
     }
   });
 

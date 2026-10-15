@@ -1052,6 +1052,27 @@ body.in-game-mode .pregame-only {
 
 .btn-end-turn {
   background: linear-gradient(135deg, #e74c3c, #c0392b);
+  transition: all 0.25s ease;
+  font-weight: 700;
+}
+
+.btn-end-turn:disabled,
+.btn-end-turn.disabled {
+  background: #34495e !important;
+  color: #7f8c8d !important;
+  opacity: 0.38 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
+  transform: none !important;
+  filter: grayscale(85%) !important;
+}
+
+.btn-end-turn:not(:disabled):hover {
+  background: linear-gradient(135deg, #ff5252, #e74c3c);
+  box-shadow: 0 4px 15px rgba(231, 76, 60, 0.55);
+  transform: translateY(-2px);
 }
 
 /* ======================================================== */
