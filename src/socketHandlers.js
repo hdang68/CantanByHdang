@@ -241,23 +241,32 @@ export function setupSocketHandlers(io) {
 
     // 4. Bắt đầu ván đấu
     socket.on('game:start', (data, callback) => {
+      let options = {};
+      let cb = callback;
+      if (typeof data === 'function') {
+        cb = data;
+        options = {};
+      } else if (data && typeof data === 'object') {
+        options = data;
+      }
+
       const roomId = socket.data.roomId;
       const room = getRoom(roomId);
       if (!room) {
-        if (typeof callback === 'function') callback({ success: false, error: 'Không tìm thấy phòng.' });
+        if (typeof cb === 'function') cb({ success: false, error: 'Không tìm thấy phòng.' });
         return;
       }
 
-      const result = startGameInRoom(roomId, socket.id);
+      const result = startGameInRoom(roomId, socket.id, options);
       if (!result.success) {
-        if (typeof callback === 'function') callback(result);
+        if (typeof cb === 'function') cb(result);
         return;
       }
 
       console.log(`[Game] Ván đấu trong phòng ${roomId} chính thức bắt đầu!`);
       broadcastGameState(io, room);
 
-      if (typeof callback === 'function') callback({ success: true });
+      if (typeof cb === 'function') cb({ success: true });
     });
 
     // Helper thực thi hành động Game Engine

@@ -1316,8 +1316,9 @@ function renderLeftPlayersPanel(gameState) {
       }
       card.setAttribute('data-player-id', p.id);
 
-      // 1. Danh hiệu xếp dọc ở góc trái trên của khung người chơi
+      // 1. Danh hiệu và số thứ tự lượt chơi xếp dọc ở góc trái trên của khung người chơi
       let badgesHtml = '';
+      badgesHtml += `<span class="title-badge badge-order" title="Lượt chơi thứ ${i + 1} trong vòng">#${i + 1}</span>`;
       if (isHost) {
         badgesHtml += `<span class="title-badge badge-host" title="Chủ phòng Catan">👑</span>`;
       }

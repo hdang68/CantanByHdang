@@ -75,9 +75,19 @@ export class CatanEngine {
     this.board = options.board || (options.isRandomBoard ? createRandomBoard() : createStandardBoard());
     this.bank = createInitialBank();
     this.devCardDeck = createDevCardDeck();
+    this.eventLog = [];
 
     this.players = {};
-    this.turnOrder = playersList.map(p => p.id);
+
+    let order = playersList.map(p => p.id);
+    if (options.randomizeTurnOrder) {
+      // Fisher-Yates shuffle ngẫu nhiên thứ tự người chơi khi bắt đầu ván
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+    }
+    this.turnOrder = order;
 
     playersList.forEach((p, idx) => {
       this.players[p.id] = {
@@ -99,6 +109,12 @@ export class CatanEngine {
         totalVictoryPoints: 0
       };
     });
+
+    // Ghi nhận sự kiện khởi tạo thứ tự chơi vào nhật ký
+    const orderNames = this.turnOrder.map(id => this.players[id]?.name || id).join(' ➔ ');
+    if (options.randomizeTurnOrder) {
+      this.logEvent(`🎲 Thứ tự lượt chơi đã được xếp ngẫu nhiên: ${orderNames}`, 'system');
+    }
 
     // Quản lý tiến trình ván đấu
     this.phase = GAME_PHASES.SETUP_ROUND_1;
@@ -122,7 +138,6 @@ export class CatanEngine {
     };
 
     this.winnerId = null;
-    this.eventLog = [];
     this.lastProduction = null;
     this.lastProductionId = null;
     this.lastSpent = null;

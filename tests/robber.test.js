@@ -140,3 +140,29 @@ test('Robber: Disconnected player auto-discards so game is never stuck in TURN_R
     Math.random = originalRandom;
   }
 });
+
+test('Turn Order: Randomize turn order shuffles player IDs and logs event', () => {
+  const players = [
+    { id: 'p1', name: 'Alice' },
+    { id: 'p2', name: 'Bob' },
+    { id: 'p3', name: 'Charlie' },
+    { id: 'p4', name: 'David' }
+  ];
+
+  // Kiểm tra không random -> Giữ nguyên thứ tự ban đầu
+  const normalEngine = new CatanEngine(players, { randomizeTurnOrder: false });
+  assert.deepEqual(normalEngine.turnOrder, ['p1', 'p2', 'p3', 'p4']);
+
+  // Kiểm tra random -> Tạo nhiều lần, ít nhất 1 lần thứ tự bị xáo trộn khác ban đầu
+  let wasShuffled = false;
+  for (let i = 0; i < 20; i++) {
+    const randomEngine = new CatanEngine(players, { randomizeTurnOrder: true });
+    assert.equal(randomEngine.turnOrder.length, 4);
+    // Phải chứa đủ 4 người chơi
+    assert.deepEqual([...randomEngine.turnOrder].sort(), ['p1', 'p2', 'p3', 'p4']);
+    if (randomEngine.turnOrder[0] !== 'p1') {
+      wasShuffled = true;
+    }
+  }
+  assert.equal(wasShuffled, true, 'Turn order must be randomized across multiple runs');
+});

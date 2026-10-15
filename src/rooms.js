@@ -106,7 +106,7 @@ export function joinRoom(roomId, playerName, socketId) {
   return { room, player: newPlayer };
 }
 
-export function startGameInRoom(roomId, requestingSocketId) {
+export function startGameInRoom(roomId, requestingSocketId, options = {}) {
   const room = getRoom(roomId);
   if (!room) {
     return { success: false, error: 'Phòng không tồn tại.' };
@@ -125,8 +125,12 @@ export function startGameInRoom(roomId, requestingSocketId) {
     return { success: false, error: 'Cần ít nhất 2 người chơi để bắt đầu (khuyên dùng 3-4 người).' };
   }
 
-  // Khởi tạo Game Engine
-  room.engine = new CatanEngine(room.players, { board: room.board });
+  // Khởi tạo Game Engine (Mặc định xáo trộn ngẫu nhiên thứ tự chơi khi vào game)
+  const shouldRandomizeOrder = options.randomizeTurnOrder !== false;
+  room.engine = new CatanEngine(room.players, {
+    board: room.board,
+    randomizeTurnOrder: shouldRandomizeOrder
+  });
   room.status = 'PLAYING';
 
   return { success: true, room };

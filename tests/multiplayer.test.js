@@ -55,7 +55,7 @@ test('Full Multiplayer Realtime Flow with Socket.IO', async (t) => {
     const bobStatePromise = new Promise((res) => clientBob.once('game:state', res));
 
     const startRes = await new Promise((res) => {
-      clientAlice.emit('game:start', {}, res);
+      clientAlice.emit('game:start', { randomizeTurnOrder: false }, res);
     });
     assert.equal(startRes.success, true);
 
