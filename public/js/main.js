@@ -2338,6 +2338,24 @@ async function handleRollDiceAction() {
 function renderPlayerSlots(room) {
   if (!room || !room.players) return;
 
+  // Phát âm thanh khi có người chơi khác trong phòng đổi màu
+  if (state.prevLobbyColors && state.prevLobbyColors[room.id]) {
+    const prevMap = state.prevLobbyColors[room.id];
+    (room.players || []).forEach(p => {
+      if (p.id !== state.playerId && prevMap[p.id] && p.color?.hex && prevMap[p.id].toLowerCase() !== p.color.hex.toLowerCase()) {
+        sound.playColorChange(p.color.hex);
+        addLog(`${p.name} đã đổi sang màu ${p.color?.name || p.color.hex}`, 'info');
+      }
+    });
+  }
+  if (!state.prevLobbyColors) state.prevLobbyColors = {};
+  state.prevLobbyColors[room.id] = {};
+  (room.players || []).forEach(p => {
+    if (p && p.id && p.color?.hex) {
+      state.prevLobbyColors[room.id][p.id] = p.color.hex;
+    }
+  });
+
   state.room = room;
   playerCount.textContent = room.players.length;
   playerList.innerHTML = '';
@@ -2422,19 +2440,28 @@ function renderPlayerSlots(room) {
             e.stopPropagation();
             const colorHex = btn.getAttribute('data-color-hex');
             try {
-              sound.play('click');
+              sound.playBop();
               const res = await emitAsync('room:change_color', { colorHex });
               if (!res.success) {
                 sound.playFail();
                 alert(res.error);
               } else {
-                sound.playSuccess();
+                sound.playColorChange(colorHex);
                 addLog(`Bạn đã đổi màu sang ${res.player?.color?.name || colorHex}`, 'info');
               }
             } catch (err) {
               sound.playFail();
               alert(err.message);
             }
+          });
+        });
+
+        // Phản hồi khi người dùng bấm vào màu đã có người khác chọn
+        slot.querySelectorAll('.color-swatch-item.disabled').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sound.playFail();
+            addLog('Màu này đã có người chơi khác chọn, vui lòng chọn màu khác!', 'warning');
           });
         });
       }
@@ -2860,7 +2887,7 @@ async function init() {
   // Tùy chọn đổi bản đồ trong sảnh chờ (Dành cho chủ phòng)
   btnLobbyRandomBoard?.addEventListener('click', async () => {
     btnLobbyRandomBoard.disabled = true;
-    sound.play('click');
+    sound.playBop();
     try {
       const res = await emitAsync('room:randomize_board');
       if (!res.success) {
@@ -2880,7 +2907,7 @@ async function init() {
 
   btnLobbyStandardBoard?.addEventListener('click', async () => {
     btnLobbyStandardBoard.disabled = true;
-    sound.play('click');
+    sound.playBop();
     try {
       const res = await emitAsync('room:standard_board');
       if (!res.success) {

@@ -47,6 +47,8 @@ const SOUND_MANIFEST = {
   'player-turn': '/assets/sounds/player-turn.mp3',
   'victory': '/assets/sounds/game-bonus.mp3',
   'bop': '/assets/sounds/bop.mp3',
+  'click': '/assets/sounds/bop.mp3',
+  'success': '/assets/sounds/gentle-pop.ogg',
   'fail': '/assets/sounds/fail.mp3',
   'start-end': '/assets/sounds/start-end.mp3'
 };
@@ -87,11 +89,13 @@ export class SoundEngine {
       } catch (_) {}
 
       window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('click', unlock);
       window.removeEventListener('keydown', unlock);
       window.removeEventListener('touchstart', unlock);
     };
 
     window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+    window.addEventListener('click', unlock, { once: true, passive: true });
     window.addEventListener('keydown', unlock, { once: true, passive: true });
     window.addEventListener('touchstart', unlock, { once: true, passive: true });
   }
@@ -308,6 +312,37 @@ export class SoundEngine {
    */
   playBop() {
     this.play('bop', { volume: this.volume * 0.25 });
+  }
+
+  /**
+   * Phát âm thanh click nút bấm UI
+   */
+  playClick() {
+    this.playBop();
+  }
+
+  /**
+   * Phát âm thanh thành công nhẹ nhàng (Gentle Pop / Chime)
+   */
+  playSuccess(opts = {}) {
+    this.play('gentle-pop', { rate: 1.15, volume: this.volume * 0.75, ...opts });
+  }
+
+  /**
+   * Phát âm thanh đổi màu quân cờ nhẹ nhàng, êm dịu, sinh động theo từng màu
+   * @param {string} colorHex Mã màu hex
+   */
+  playColorChange(colorHex) {
+    const pitchMap = {
+      '#e74c3c': 0.95, // Đỏ (ấm)
+      '#3498db': 1.18, // Xanh dương (trong trẻo)
+      '#e67e22': 1.05, // Cam (sáng)
+      '#ecf0f1': 1.35, // Trắng (thanh thoát)
+      '#2ecc71': 1.25, // Xanh lá (tươi mát)
+      '#9b59b6': 1.10  // Tím (huyền bí)
+    };
+    const rate = (colorHex && pitchMap[colorHex.toLowerCase()]) || 1.15;
+    this.play('gentle-pop', { rate, volume: this.volume * 0.8 });
   }
 
   /**
