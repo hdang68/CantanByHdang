@@ -123,11 +123,13 @@
               <span id="lobbyBoardBadge" class="lobby-board-badge">Bản đồ Tiêu chuẩn</span>
             </div>
             <div id="lobbyHostMapActions" class="lobby-map-actions">
-              <button id="btnLobbyRandomBoard" class="btn btn-accent btn-sm" title="Chủ phòng: Sinh bản đồ ngẫu nhiên mới hợp lệ">
-                🎲 Đổi map ngẫu nhiên
-              </button>
-              <button id="btnLobbyStandardBoard" class="btn btn-secondary btn-sm" title="Chủ phòng: Đặt lại bản đồ tiêu chuẩn">
-                🗺️ Map tiêu chuẩn
+              <label class="map-toggle-switch" title="Chủ phòng: Bật/Tắt chế độ bản đồ ngẫu nhiên">
+                <input type="checkbox" id="toggleRandomBoard">
+                <span class="map-toggle-slider"></span>
+                <span class="map-toggle-text">🎲 Random Map</span>
+              </label>
+              <button id="btnRerollRandomBoard" class="btn btn-outline btn-sm" title="Sinh lại bản đồ ngẫu nhiên khác" style="display: none;">
+                🔄 Đổi map khác
               </button>
             </div>
           </div>

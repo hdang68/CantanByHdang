@@ -93,8 +93,8 @@ const btnStartGame = document.getElementById('btnStartGame');
 const waitingNote = document.getElementById('waitingNote');
 const lobbyBoardBadge = document.getElementById('lobbyBoardBadge');
 const lobbyHostMapActions = document.getElementById('lobbyHostMapActions');
-const btnLobbyRandomBoard = document.getElementById('btnLobbyRandomBoard');
-const btnLobbyStandardBoard = document.getElementById('btnLobbyStandardBoard');
+const toggleRandomBoard = document.getElementById('toggleRandomBoard');
+const btnRerollRandomBoard = document.getElementById('btnRerollRandomBoard');
 
 // 1. CỘT TRÁI (LEFT PANEL): 4 Người chơi & Túi thẻ
 const inGameLeftPanel = document.getElementById('inGameLeftPanel');
@@ -2364,10 +2364,17 @@ function renderPlayerSlots(room) {
   state.isHost = isHost;
 
   // Cập nhật trạng thái bản đồ và quyền điều khiển map của chủ phòng trong sảnh chờ
-  const isRandom = room.boardMode === 'RANDOM';
+  const isRandom = (room.boardMode === 'RANDOM');
   if (lobbyBoardBadge) {
     lobbyBoardBadge.textContent = isRandom ? '🎲 Bản đồ Ngẫu nhiên' : '🗺️ Bản đồ Tiêu chuẩn';
     lobbyBoardBadge.classList.toggle('random-mode', isRandom);
+  }
+  if (toggleRandomBoard) {
+    toggleRandomBoard.checked = isRandom;
+    toggleRandomBoard.disabled = !isHost;
+  }
+  if (btnRerollRandomBoard) {
+    btnRerollRandomBoard.style.display = (isHost && isRandom) ? 'inline-flex' : 'none';
   }
   if (lobbyHostMapActions) {
     lobbyHostMapActions.style.display = isHost ? 'flex' : 'none';
@@ -2509,6 +2516,9 @@ function showJoinView() {
   state.room = null;
   state.roomId = null;
   state.gameState = null;
+  state.playerId = null;
+  state.sessionToken = null;
+  state.isHost = false;
   clearSession();
 
   document.body.classList.remove('in-game-mode');
@@ -2520,6 +2530,17 @@ function showJoinView() {
     lobbyBoardBadge.textContent = '🗺️ Bản đồ Tiêu chuẩn';
     lobbyBoardBadge.classList.remove('random-mode');
   }
+  if (toggleRandomBoard) {
+    toggleRandomBoard.checked = false;
+  }
+  if (btnRerollRandomBoard) {
+    btnRerollRandomBoard.style.display = 'none';
+  }
+
+  fetch('/api/board/standard')
+    .then(r => r.json())
+    .then(b => renderBoard(b))
+    .catch(() => {});
 
   // Đặt lại 4 vị trí người chơi tiêu chuẩn trên bàn cờ
   renderLeftPlayersPanel(null);
@@ -2868,11 +2889,19 @@ async function init() {
   });
 
   btnLeaveRoom.addEventListener('click', async () => {
-    await emitAsync('room:leave');
-    showJoinView();
+    sound.playBop();
+    btnLeaveRoom.disabled = true;
+    try {
+      await emitAsync('room:leave');
+    } catch (err) {
+      console.warn('Lỗi khi rời phòng:', err);
+    } finally {
+      btnLeaveRoom.disabled = false;
+      showJoinView();
+    }
   });
 
-    btnCopyInvite.addEventListener('click', async () => {
+  btnCopyInvite.addEventListener('click', async () => {
     if (!state.roomId) return;
     const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${state.roomId}`;
     try {
@@ -2884,9 +2913,36 @@ async function init() {
     }
   });
 
-  // Tùy chọn đổi bản đồ trong sảnh chờ (Dành cho chủ phòng)
-  btnLobbyRandomBoard?.addEventListener('click', async () => {
-    btnLobbyRandomBoard.disabled = true;
+  // Bật / Tắt chế độ Bản đồ ngẫu nhiên bằng Toggle Switch (Chỉ chủ phòng)
+  toggleRandomBoard?.addEventListener('change', async () => {
+    if (!state.isHost) return;
+    const isChecked = toggleRandomBoard.checked;
+    sound.playBop();
+    toggleRandomBoard.disabled = true;
+    try {
+      const res = await emitAsync('room:toggle_board_mode', { isRandom: isChecked });
+      if (!res.success) {
+        sound.playFail();
+        alert(res.error);
+        toggleRandomBoard.checked = !isChecked;
+      } else {
+        sound.playSuccess();
+        const modeName = isChecked ? 'Bản đồ Ngẫu nhiên' : 'Bản đồ Tiêu chuẩn';
+        addLog(`Chủ phòng đã chuyển sang [${modeName}]`, 'event');
+      }
+    } catch (err) {
+      sound.playFail();
+      alert(err.message);
+      toggleRandomBoard.checked = !isChecked;
+    } finally {
+      toggleRandomBoard.disabled = !state.isHost;
+    }
+  });
+
+  // Sinh lại bản đồ ngẫu nhiên khác khi đang ở chế độ Random (Chỉ chủ phòng)
+  btnRerollRandomBoard?.addEventListener('click', async () => {
+    if (!state.isHost) return;
+    btnRerollRandomBoard.disabled = true;
     sound.playBop();
     try {
       const res = await emitAsync('room:randomize_board');
@@ -2895,33 +2951,13 @@ async function init() {
         alert(res.error);
       } else {
         sound.playSuccess();
-        addLog('Chủ phòng đã sinh Bản đồ ngẫu nhiên mới!', 'event');
+        addLog('Chủ phòng đã sinh lại Bản đồ ngẫu nhiên mới!', 'event');
       }
     } catch (err) {
       sound.playFail();
       alert(err.message);
     } finally {
-      btnLobbyRandomBoard.disabled = false;
-    }
-  });
-
-  btnLobbyStandardBoard?.addEventListener('click', async () => {
-    btnLobbyStandardBoard.disabled = true;
-    sound.playBop();
-    try {
-      const res = await emitAsync('room:standard_board');
-      if (!res.success) {
-        sound.playFail();
-        alert(res.error);
-      } else {
-        sound.playSuccess();
-        addLog('Chủ phòng đã đặt lại Bản đồ tiêu chuẩn!', 'event');
-      }
-    } catch (err) {
-      sound.playFail();
-      alert(err.message);
-    } finally {
-      btnLobbyStandardBoard.disabled = false;
+      btnRerollRandomBoard.disabled = false;
     }
   });
 

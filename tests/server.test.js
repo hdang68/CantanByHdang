@@ -110,6 +110,31 @@ test('Server & Socket.IO Multiplayer Infrastructure', async (t) => {
     assert.ok(invalidJoinRes.error);
   });
 
+  await t.test('Host toggles board mode to RANDOM and back to STANDARD', async () => {
+    // Chuyển sang RANDOM
+    const randomRes = await new Promise((resolve) => {
+      client1.emit('room:toggle_board_mode', { isRandom: true }, resolve);
+    });
+    assert.equal(randomRes.success, true);
+    assert.equal(randomRes.boardMode, 'RANDOM');
+    assert.equal(randomRes.room.boardMode, 'RANDOM');
+
+    // Chuyển lại về STANDARD
+    const standardRes = await new Promise((resolve) => {
+      client1.emit('room:toggle_board_mode', { isRandom: false }, resolve);
+    });
+    assert.equal(standardRes.success, true);
+    assert.equal(standardRes.boardMode, 'STANDARD');
+    assert.equal(standardRes.room.boardMode, 'STANDARD');
+  });
+
+  await t.test('Second player leaves the room', async () => {
+    const leaveRes = await new Promise((resolve) => {
+      client2.emit('room:leave', {}, resolve);
+    });
+    assert.equal(leaveRes.success, true);
+  });
+
   // Teardown
   if (client1) client1.disconnect();
   if (client2) client2.disconnect();

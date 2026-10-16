@@ -37,6 +37,12 @@ export function broadcastGameState(io, room) {
   }
 }
 
+function getCallback(arg1, arg2) {
+  if (typeof arg1 === 'function') return arg1;
+  if (typeof arg2 === 'function') return arg2;
+  return () => {};
+}
+
 export function setupSocketHandlers(io) {
   io.on('connection', (socket) => {
     console.log(`[Socket] Kết nối mới: ${socket.id}`);
@@ -171,48 +177,78 @@ export function setupSocketHandlers(io) {
       }
     });
     // 3B. Đổi bản đồ ngẫu nhiên trong sảnh chờ (Chỉ chủ phòng)
-    socket.on('room:randomize_board', (callback) => {
+    socket.on('room:randomize_board', (data, callback) => {
+      const cb = getCallback(data, callback);
       try {
         const roomId = socket.data.roomId;
         if (!roomId) {
-          if (typeof callback === 'function') callback({ success: false, error: 'Bạn chưa vào phòng.' });
-          return;
+          return cb({ success: false, error: 'Bạn chưa vào phòng.' });
         }
         const result = randomizeRoomBoard(roomId, socket.id);
         if (!result.success) {
-          if (typeof callback === 'function') callback(result);
-          return;
+          return cb(result);
         }
         const publicView = getRoomPublicView(result.room);
         console.log(`[Room] Chủ phòng đã sinh bản đồ ngẫu nhiên cho phòng ${roomId}`);
         io.to(roomId).emit('room:state', publicView);
-        if (typeof callback === 'function') callback({ success: true, room: publicView });
+        cb({ success: true, room: publicView });
       } catch (err) {
         console.error('[Room] Lỗi đổi map ngẫu nhiên:', err);
-        if (typeof callback === 'function') callback({ success: false, error: 'Không thể đổi bản đồ lúc này.' });
+        cb({ success: false, error: 'Không thể đổi bản đồ lúc này.' });
       }
     });
 
     // 3C. Đặt về bản đồ tiêu chuẩn trong sảnh chờ (Chỉ chủ phòng)
-    socket.on('room:standard_board', (callback) => {
+    socket.on('room:standard_board', (data, callback) => {
+      const cb = getCallback(data, callback);
       try {
         const roomId = socket.data.roomId;
         if (!roomId) {
-          if (typeof callback === 'function') callback({ success: false, error: 'Bạn chưa vào phòng.' });
-          return;
+          return cb({ success: false, error: 'Bạn chưa vào phòng.' });
         }
         const result = setStandardRoomBoard(roomId, socket.id);
         if (!result.success) {
-          if (typeof callback === 'function') callback(result);
-          return;
+          return cb(result);
         }
         const publicView = getRoomPublicView(result.room);
         console.log(`[Room] Chủ phòng đã đặt lại bản đồ tiêu chuẩn cho phòng ${roomId}`);
         io.to(roomId).emit('room:state', publicView);
-        if (typeof callback === 'function') callback({ success: true, room: publicView });
+        cb({ success: true, room: publicView });
       } catch (err) {
         console.error('[Room] Lỗi đặt map tiêu chuẩn:', err);
-        if (typeof callback === 'function') callback({ success: false, error: 'Không thể đặt bản đồ lúc này.' });
+        cb({ success: false, error: 'Không thể đặt bản đồ lúc này.' });
+      }
+    });
+
+    // 3C2. Bật / Tắt chế độ bản đồ ngẫu nhiên (Toggle switch cho chủ phòng)
+    socket.on('room:toggle_board_mode', (data, callback) => {
+      const cb = getCallback(data, callback);
+      try {
+        const roomId = socket.data.roomId;
+        if (!roomId) {
+          return cb({ success: false, error: 'Bạn chưa vào phòng.' });
+        }
+        const room = getRoom(roomId);
+        if (!room) return cb({ success: false, error: 'Phòng không tồn tại.' });
+
+        const isCurrentlyRandom = (room.boardMode === 'RANDOM');
+        const shouldBeRandom = (data && typeof data.isRandom === 'boolean') ? data.isRandom : !isCurrentlyRandom;
+
+        const result = shouldBeRandom
+          ? randomizeRoomBoard(roomId, socket.id)
+          : setStandardRoomBoard(roomId, socket.id);
+
+        if (!result.success) {
+          return cb(result);
+        }
+
+        const publicView = getRoomPublicView(result.room);
+        console.log(`[Room] Chủ phòng đã chuyển chế độ bản đồ phòng ${roomId} sang: ${result.room.boardMode}`);
+        io.to(roomId).emit('room:state', publicView);
+        cb({ success: true, room: publicView, boardMode: result.room.boardMode });
+      } catch (err) {
+        console.error('[Room] Lỗi đổi chế độ map:', err);
+        cb({ success: false, error: 'Không thể đổi chế độ bản đồ lúc này.' });
       }
     });
 
@@ -433,18 +469,21 @@ export function setupSocketHandlers(io) {
     });
 
     // 14. Rời phòng & Ngắt kết nối
-    socket.on('room:leave', (callback) => {
+    socket.on('room:leave', (data, callback) => {
+      const cb = getCallback(data, callback);
       const roomId = socket.data.roomId;
       if (roomId) {
         const result = leaveRoom(roomId, socket.id);
         socket.leave(roomId);
         delete socket.data.roomId;
+        delete socket.data.playerId;
+        delete socket.data.sessionToken;
 
         if (result && result.room) {
           io.to(roomId).emit('room:state', getRoomPublicView(result.room));
         }
       }
-      if (typeof callback === 'function') callback({ success: true });
+      cb({ success: true });
     });
 
     socket.on('disconnect', (reason) => {
