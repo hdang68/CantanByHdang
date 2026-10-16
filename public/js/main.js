@@ -45,7 +45,8 @@ const state = {
   lastDevCardPlayedId: null,
   prevPlayersSnapshot: null,
   draggedData: null,
-  cardZoomIndex: 1 // 0: small, 1: medium, 2: large
+  cardZoomIndex: 1, // 0: small, 1: medium, 2: large
+  handViewMode: localStorage.getItem('catan_hand_view_mode') || 'compact' // 'compact' | 'cards'
 };
 
 // Phục hồi phiên trước đó từ sessionStorage ngay khi nạp trang (tránh gián đoạn khi F5)
@@ -104,6 +105,12 @@ const resourceCardsGrid = document.getElementById('resourceCardsGrid');
 const btnToggleHandCollapse = document.getElementById('btnToggleHandCollapse');
 const handToggleIcon = document.getElementById('handToggleIcon');
 const handToggleLabel = document.getElementById('handToggleLabel');
+const btnToggleHandViewMode = document.getElementById('btnToggleHandViewMode');
+const handViewModeIcon = document.getElementById('handViewModeIcon');
+const handViewModeLabel = document.getElementById('handViewModeLabel');
+const compactHandView = document.getElementById('compactHandView');
+const cardsHandView = document.getElementById('cardsHandView');
+const individualCardsList = document.getElementById('individualCardsList');
 const handCardsSummaryBadge = document.getElementById('handCardsSummaryBadge');
 const handHeader = document.getElementById('handHeader');
 const handDevCardsList = document.getElementById('handDevCardsList');
@@ -267,6 +274,22 @@ const DEV_CARD_NAMES = {
   year_of_plenty: 'Bội Thu (Lấy 2 tài nguyên)',
   monopoly: 'Độc Quyền (Gom tài nguyên)',
   victory_point: 'Điểm Chiến Thắng (+1 VP ẩn)'
+};
+
+const DEV_CARD_ICONS = {
+  knight: '⚔️',
+  road_building: '🛣️',
+  year_of_plenty: '🌾',
+  monopoly: '💎',
+  victory_point: '🏆'
+};
+
+const DEV_CARD_SHORT_NAMES = {
+  knight: 'Hiệp Sĩ',
+  road_building: 'Xây Đường',
+  year_of_plenty: 'Bội Thu',
+  monopoly: 'Độc Quyền',
+  victory_point: 'Chiến Thắng'
 };
 
 // Trạng thái chọn tài nguyên giao dịch giữa người chơi
@@ -700,6 +723,9 @@ function updateGameHud(gameState) {
 
     // Render thẻ phát triển dạng chip có thể kéo thả
     renderHandDevCards(myData.devCards || [], isMyTurn, gameState.phase);
+
+    // Render danh sách từng lá bài kéo thả trong chế độ thẻ bài
+    renderIndividualCards(myData, isMyTurn, gameState.phase);
   }
 
   // 4. Cột phải: Ngân hàng Catan
@@ -1469,6 +1495,213 @@ function renderHandDevCards(devCards, isMyTurn, phase) {
 
     handDevCardsList.appendChild(chip);
   });
+}
+
+// ========================================================
+// HỆ THỐNG CHUYỂN ĐỔI CHẾ ĐỘ XEM TÚI THẺ (COMPACT VS CARDS)
+// ========================================================
+
+// Áp dụng chế độ xem túi thẻ (Ô đếm số lượng vs Từng thẻ bài kéo thả)
+function applyHandViewMode(mode = state.handViewMode) {
+  state.handViewMode = mode;
+  const isCards = (mode === 'cards');
+
+  if (compactHandView) compactHandView.classList.toggle('hidden', isCards);
+  if (cardsHandView) cardsHandView.classList.toggle('hidden', !isCards);
+  if (viewerHandSection) viewerHandSection.classList.toggle('hand-mode-cards', isCards);
+
+  if (handViewModeIcon) {
+    handViewModeIcon.textContent = isCards ? '🔢' : '🃏';
+  }
+  if (handViewModeLabel) {
+    handViewModeLabel.textContent = isCards ? 'Ô đếm' : 'Thẻ bài';
+  }
+  if (btnToggleHandViewMode) {
+    btnToggleHandViewMode.title = isCards ? 'Chuyển về dạng: Ô đếm số lượng' : 'Chuyển sang dạng: Từng thẻ bài kéo thả';
+  }
+}
+
+// Chuyển đổi qua lại giữa 2 chế độ xem túi thẻ
+function toggleHandViewMode() {
+  const nextMode = (state.handViewMode === 'cards') ? 'compact' : 'cards';
+  sound?.playBop?.();
+  localStorage.setItem('catan_hand_view_mode', nextMode);
+  applyHandViewMode(nextMode);
+
+  // Nếu đang có dữ liệu người chơi, render lại danh sách thẻ ngay
+  if (state.gameState && state.playerId) {
+    const myData = state.gameState.players?.[state.playerId];
+    const isMyTurn = (state.gameState.currentTurnPlayerId === state.playerId);
+    renderIndividualCards(myData, isMyTurn, state.gameState.phase);
+  }
+}
+
+// Render từng lá bài tài nguyên và thẻ phát triển riêng lẻ (Chế độ Thẻ bài kéo thả)
+function renderIndividualCards(myData, isMyTurn, phase) {
+  if (!individualCardsList) return;
+  individualCardsList.innerHTML = '';
+
+  if (!myData) {
+    individualCardsList.innerHTML = `
+      <div class="ind-cards-empty">
+        <div class="empty-icon">🎴</div>
+        <div class="empty-text">Chưa có thông tin túi thẻ</div>
+      </div>
+    `;
+    return;
+  }
+
+  const resOrder = ['wood', 'clay', 'sheep', 'wheat', 'ore'];
+  let totalCardsCount = 0;
+
+  // 1. Thẻ tài nguyên (Mỗi lá bài riêng lẻ)
+  const resources = myData.resources || {};
+  resOrder.forEach(res => {
+    const count = resources[res] || 0;
+    const icon = RESOURCE_ICONS[res] || '📦';
+    const name = RESOURCE_NAMES[res] || res;
+
+    for (let i = 0; i < count; i++) {
+      totalCardsCount++;
+      const card = document.createElement('div');
+      card.className = `ind-card-item ind-res-card res-${res}`;
+      card.setAttribute('data-res', res);
+      card.setAttribute('data-index', i);
+      card.draggable = true;
+      card.style.cursor = 'grab';
+      card.title = `Kéo thả lá bài ${name} vào Ngân hàng để đổi, vào Đối thủ để Trade, hoặc vào Cảng biển! (Bấm đúp để mở đổi Ngân hàng)`;
+
+      card.innerHTML = `
+        <div class="ind-card-glow"></div>
+        <div class="ind-card-top">
+          <span class="ind-card-mini-icon">${icon}</span>
+          <span class="ind-card-type-tag">Tài nguyên</span>
+        </div>
+        <div class="ind-card-artwork">
+          <span class="ind-card-big-icon">${icon}</span>
+        </div>
+        <div class="ind-card-bottom">
+          <span class="ind-card-title">${name}</span>
+        </div>
+      `;
+
+      card.addEventListener('dragstart', (e) => {
+        card.classList.add('is-dragging');
+        state.draggedData = { type: 'resource', resource: res };
+        e.dataTransfer.setData('text/plain', JSON.stringify(state.draggedData));
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('is-dragging');
+        state.draggedData = null;
+      });
+
+      // Bấm đúp để mở nhanh giao dịch ngân hàng
+      card.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        openBankTradeModal(res);
+      });
+
+      individualCardsList.appendChild(card);
+    }
+  });
+
+  // 2. Thẻ phát triển (Dev Cards)
+  const devCards = myData.devCards || [];
+  const unplayedCards = devCards.filter(c => !c.isPlayed);
+
+  unplayedCards.forEach((c) => {
+    totalCardsCount++;
+    const card = document.createElement('div');
+    card.className = `ind-card-item ind-dev-card dev-${c.type}`;
+    card.setAttribute('data-card-type', c.type);
+
+    const icon = DEV_CARD_ICONS[c.type] || '🃏';
+    const title = DEV_CARD_SHORT_NAMES[c.type] || c.type;
+    const isVP = (c.type === 'victory_point');
+    const isTurnBought = (c.turnBought === state.gameState?.turnNumber);
+    const canPlay = isMyTurn && !isTurnBought && (phase === 'TURN_MAIN' || (c.type === 'knight' && phase === 'TURN_ROLL'));
+
+    card.draggable = Boolean(canPlay && !isVP);
+    card.style.cursor = (canPlay && !isVP) ? 'grab' : (isVP ? 'default' : 'not-allowed');
+
+    let tooltip = '';
+    if (isVP) {
+      tooltip = `${title}: +1 Điểm Chiến Thắng (Ẩn, tính vào tổng điểm cuối cùng)`;
+    } else if (canPlay) {
+      tooltip = `Kéo thả lá bài ${title} ra giữa bàn cờ hoặc bấm đúp để đánh thẻ!`;
+    } else if (isTurnBought) {
+      tooltip = `${title}: Mua trong lượt này (chưa thể sử dụng)`;
+    } else {
+      tooltip = `${title}: Chưa tới lượt của bạn`;
+    }
+    card.title = tooltip;
+
+    card.innerHTML = `
+      <div class="ind-card-glow"></div>
+      <div class="ind-card-top">
+        <span class="ind-card-mini-icon">${icon}</span>
+        <span class="ind-card-type-tag dev-tag">Phát triển</span>
+      </div>
+      <div class="ind-card-artwork">
+        <span class="ind-card-big-icon">${icon}</span>
+      </div>
+      <div class="ind-card-bottom">
+        <span class="ind-card-title">${title}</span>
+      </div>
+    `;
+
+    if (canPlay && !isVP) {
+      card.addEventListener('dragstart', (e) => {
+        card.classList.add('is-dragging');
+        state.draggedData = { type: 'dev_card', cardType: c.type };
+        e.dataTransfer.setData('text/plain', JSON.stringify(state.draggedData));
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('is-dragging');
+        state.draggedData = null;
+      });
+
+      // Bấm đúp để đánh thẻ trực tiếp
+      card.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        if (c.type === 'knight') {
+          emitAsync('game:play_knight').then(res => {
+            if (!res.success) alert(res.error);
+            else addLog('Bạn đã kích hoạt thẻ Hiệp sĩ! Hãy di chuyển Tên cướp.', 'event');
+          });
+        } else if (c.type === 'year_of_plenty') {
+          openDevCardsModal();
+          yearOfPlentySelector.classList.remove('hidden');
+        } else if (c.type === 'monopoly') {
+          openDevCardsModal();
+          monopolySelector.classList.remove('hidden');
+        } else {
+          openDevCardsModal();
+        }
+      });
+    } else {
+      // Nhấp đúp thẻ không đánh được -> mở modal thẻ phát triển để xem chi tiết
+      card.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        openDevCardsModal();
+      });
+    }
+
+    individualCardsList.appendChild(card);
+  });
+
+  // 3. Trạng thái túi thẻ trống
+  if (totalCardsCount === 0) {
+    individualCardsList.innerHTML = `
+      <div class="ind-cards-empty">
+        <div class="empty-icon">🎴</div>
+        <div class="empty-text">Túi thẻ bài trống</div>
+        <div class="empty-sub">Tài nguyên & Thẻ phát triển bạn sở hữu sẽ xuất hiện tại đây dưới dạng thẻ bài</div>
+      </div>
+    `;
+  }
 }
 
 // Mở pop-up giao dịch cá nhân với 1 người chơi cụ thể (Chỉ trong lượt của bạn)
@@ -2794,6 +3027,13 @@ async function init() {
   handHeader?.addEventListener('dblclick', (e) => {
     e.stopPropagation();
     toggleHandCollapse();
+  });
+
+  // 5B. Chuyển đổi chế độ xem túi thẻ (Ô đếm số lượng vs Từng thẻ bài kéo thả)
+  applyHandViewMode();
+  btnToggleHandViewMode?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleHandViewMode();
   });
 
   // 6. Ping & Logs

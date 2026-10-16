@@ -1500,10 +1500,19 @@ body.in-game-mode .pregame-only {
   transition: all 0.25s ease;
 }
 
+/* Chế độ Thẻ bài: Mở rộng ngang để chứa từng lá bài trực quan */
+.viewer-hand-section.hand-mode-cards {
+  width: min(560px, calc(100vw - 340px));
+}
+
 @media (max-width: 1024px) {
   .viewer-hand-section {
     left: 16px;
     bottom: 16px;
+  }
+  .viewer-hand-section.hand-mode-cards {
+    width: calc(100vw - 32px);
+    left: 16px;
   }
 }
 
@@ -1624,10 +1633,265 @@ body.in-game-mode .pregame-only {
   transition: all 0.15s;
 }
 
-.draggable-dev-chip:hover {
-  background: rgba(230, 126, 34, 0.2);
-  border-color: var(--color-primary);
-  transform: translateY(-2px);
+.btn-toggle-hand.btn-view-mode {
+  background: rgba(241, 196, 15, 0.12);
+  border-color: rgba(241, 196, 15, 0.35);
+  color: #f1c40f;
+}
+
+.btn-toggle-hand.btn-view-mode:hover {
+  background: rgba(241, 196, 15, 0.25);
+  border-color: #f1c40f;
+  color: #fff;
+}
+
+.compact-hand-view {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+/* ======================================================== */
+/* CHẾ ĐỘ THẺ BÀI: TỪNG LÁ BÀI TÀI NGUYÊN & PHÁT TRIỂN      */
+/* ======================================================== */
+.cards-hand-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.individual-cards-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: stretch;
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 2px 8px 2px;
+}
+
+.individual-cards-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.individual-cards-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+/* Thẻ bài đơn lẻ */
+.ind-card-item {
+  width: 66px;
+  height: 98px;
+  border-radius: 9px;
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.ind-card-item:hover {
+  transform: translateY(-8px) scale(1.05);
+  z-index: 10;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.7);
+}
+
+.ind-card-item:active,
+.ind-card-item.is-dragging {
+  cursor: grabbing;
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+.ind-card-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.15), transparent 70%);
+  pointer-events: none;
+}
+
+/* Nội dung bên trong thẻ */
+.ind-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 5px 0 5px;
+  z-index: 2;
+}
+
+.ind-card-mini-icon {
+  font-size: 0.75rem;
+}
+
+.ind-card-type-tag {
+  font-size: 0.52rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.ind-card-type-tag.dev-tag {
+  color: #e056fd;
+  font-weight: 800;
+}
+
+.ind-card-artwork {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.ind-card-big-icon {
+  font-size: 1.85rem;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+  transition: transform 0.2s ease;
+}
+
+.ind-card-item:hover .ind-card-big-icon {
+  transform: scale(1.15);
+}
+
+.ind-card-bottom {
+  padding: 2px 4px 5px 4px;
+  text-align: center;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(2px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ind-card-title {
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: #fff;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+/* Thẻ Tài nguyên */
+.ind-res-card.res-wood {
+  background: linear-gradient(145deg, #1f402c 0%, #112419 60%, #08120c 100%);
+  border-color: #27ae60;
+}
+.ind-res-card.res-wood:hover {
+  box-shadow: 0 10px 22px rgba(39, 174, 96, 0.45);
+  border-color: #2ecc71;
+}
+
+.ind-res-card.res-clay {
+  background: linear-gradient(145deg, #57291a 0%, #35170d 60%, #1a0b06 100%);
+  border-color: #d35400;
+}
+.ind-res-card.res-clay:hover {
+  box-shadow: 0 10px 22px rgba(211, 84, 0, 0.45);
+  border-color: #e67e22;
+}
+
+.ind-res-card.res-sheep {
+  background: linear-gradient(145deg, #1b4b3b 0%, #0d2b22 60%, #061712 100%);
+  border-color: #16a085;
+}
+.ind-res-card.res-sheep:hover {
+  box-shadow: 0 10px 22px rgba(26, 188, 156, 0.45);
+  border-color: #1abc9c;
+}
+
+.ind-res-card.res-wheat {
+  background: linear-gradient(145deg, #594716 0%, #362a0c 60%, #1c1505 100%);
+  border-color: #f39c12;
+}
+.ind-res-card.res-wheat:hover {
+  box-shadow: 0 10px 22px rgba(243, 156, 18, 0.45);
+  border-color: #f1c40f;
+}
+
+.ind-res-card.res-ore {
+  background: linear-gradient(145deg, #374656 0%, #212c37 60%, #11171d 100%);
+  border-color: #7f8c8d;
+}
+.ind-res-card.res-ore:hover {
+  box-shadow: 0 10px 22px rgba(149, 165, 166, 0.45);
+  border-color: #bdc3c7;
+}
+
+/* Thẻ Phát triển (Dev Cards) */
+.ind-dev-card {
+  background: linear-gradient(145deg, #441846 0%, #260a28 60%, #130414 100%);
+  border-color: #9b59b6;
+}
+.ind-dev-card:hover {
+  box-shadow: 0 10px 22px rgba(155, 89, 182, 0.5);
+  border-color: #be2edd;
+}
+
+.ind-dev-card.dev-knight {
+  background: linear-gradient(145deg, #51182c 0%, #300c19 60%, #18050c 100%);
+  border-color: #e056fd;
+}
+.ind-dev-card.dev-road_building {
+  background: linear-gradient(145deg, #1b3d44 0%, #0d2328 60%, #051214 100%);
+  border-color: #00cec9;
+}
+.ind-dev-card.dev-year_of_plenty {
+  background: linear-gradient(145deg, #5c410c 0%, #332305 60%, #1a1102 100%);
+  border-color: #e1b12c;
+}
+.ind-dev-card.dev-monopoly {
+  background: linear-gradient(145deg, #123759 0%, #0a2137 60%, #04101c 100%);
+  border-color: #0984e3;
+}
+.ind-dev-card.dev-victory_point {
+  background: linear-gradient(145deg, #664c0a 0%, #3a2b05 60%, #1f1702 100%);
+  border-color: #f1c40f;
+}
+
+/* Thông báo túi thẻ trống */
+.ind-cards-empty {
+  width: 100%;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-muted);
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1.5px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.ind-cards-empty .empty-icon {
+  font-size: 1.8rem;
+  opacity: 0.6;
+}
+
+.ind-cards-empty .empty-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #ecf0f1;
+}
+
+.ind-cards-empty .empty-sub {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 /* ======================================================== */

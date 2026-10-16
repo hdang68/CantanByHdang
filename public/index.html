@@ -199,6 +199,10 @@
                 <span id="handCardsSummaryBadge" class="hand-summary-badge hidden">0 thẻ</span>
               </div>
               <div class="hand-controls">
+                <button id="btnToggleHandViewMode" class="btn-toggle-hand btn-view-mode" title="Chuyển dạng: Ô đếm / Thẻ bài">
+                  <span id="handViewModeIcon">🃏</span>
+                  <span id="handViewModeLabel" class="toggle-label">Thẻ bài</span>
+                </button>
                 <button id="btnToggleHandCollapse" class="btn-toggle-hand" title="Thu gọn / Mở rộng túi thẻ">
                   <span id="handToggleIcon">▼</span>
                   <span id="handToggleLabel" class="toggle-label">Thu gọn</span>
@@ -208,43 +212,53 @@
 
             <!-- Thân túi thẻ (Có thể thu gọn / mở rộng) -->
             <div id="handBodyContainer" class="hand-body-container">
-              <!-- Thẻ tài nguyên có thể kéo thả -->
-              <div id="resourceCardsGrid" class="resource-cards-grid">
-                <div class="res-card-item wood" data-res="wood" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                  <div class="card-icon">🌲</div>
-                  <div class="card-name">Gỗ</div>
-                  <div class="card-count" id="resWoodCount">0</div>
+              <!-- DẠNG 1: Ô ĐẾM SỐ LƯỢNG (MẶC ĐỊNH NHƯ HIỆN TẠI) -->
+              <div id="compactHandView" class="compact-hand-view">
+                <!-- Thẻ tài nguyên có thể kéo thả -->
+                <div id="resourceCardsGrid" class="resource-cards-grid">
+                  <div class="res-card-item wood" data-res="wood" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                    <div class="card-icon">🌲</div>
+                    <div class="card-name">Gỗ</div>
+                    <div class="card-count" id="resWoodCount">0</div>
+                  </div>
+                  <div class="res-card-item clay" data-res="clay" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                    <div class="card-icon">🧱</div>
+                    <div class="card-name">Sét</div>
+                    <div class="card-count" id="resClayCount">0</div>
+                  </div>
+                  <div class="res-card-item sheep" data-res="sheep" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                    <div class="card-icon">🐑</div>
+                    <div class="card-name">Cừu</div>
+                    <div class="card-count" id="resSheepCount">0</div>
+                  </div>
+                  <div class="res-card-item wheat" data-res="wheat" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                    <div class="card-icon">🌾</div>
+                    <div class="card-name">Mì</div>
+                    <div class="card-count" id="resWheatCount">0</div>
+                  </div>
+                  <div class="res-card-item ore" data-res="ore" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                    <div class="card-icon">⛰️</div>
+                    <div class="card-name">Quặng</div>
+                    <div class="card-count" id="resOreCount">0</div>
+                  </div>
                 </div>
-                <div class="res-card-item clay" data-res="clay" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                  <div class="card-icon">🧱</div>
-                  <div class="card-name">Sét</div>
-                  <div class="card-count" id="resClayCount">0</div>
-                </div>
-                <div class="res-card-item sheep" data-res="sheep" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                  <div class="card-icon">🐑</div>
-                  <div class="card-name">Cừu</div>
-                  <div class="card-count" id="resSheepCount">0</div>
-                </div>
-                <div class="res-card-item wheat" data-res="wheat" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                  <div class="card-icon">🌾</div>
-                  <div class="card-name">Mì</div>
-                  <div class="card-count" id="resWheatCount">0</div>
-                </div>
-                <div class="res-card-item ore" data-res="ore" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                  <div class="card-icon">⛰️</div>
-                  <div class="card-name">Quặng</div>
-                  <div class="card-count" id="resOreCount">0</div>
+
+                <!-- Thẻ phát triển trong tay (Kéo thả ra bàn để đánh thẻ) -->
+                <div class="hand-dev-section">
+                  <div class="dev-header">
+                    <span>🃏 THẺ PHÁT TRIỂN (<strong id="myDevCardsBadge">0</strong>)</span>
+                    <button id="btnOpenDevCards" class="btn btn-outline btn-xs">Chi tiết</button>
+                  </div>
+                  <div id="handDevCardsList" class="hand-dev-cards-list">
+                    <!-- Render dev cards có thể kéo thả -->
+                  </div>
                 </div>
               </div>
 
-              <!-- Thẻ phát triển trong tay (Kéo thả ra bàn để đánh thẻ) -->
-              <div class="hand-dev-section">
-                <div class="dev-header">
-                  <span>🃏 THẺ PHÁT TRIỂN (<strong id="myDevCardsBadge">0</strong>)</span>
-                  <button id="btnOpenDevCards" class="btn btn-outline btn-xs">Chi tiết</button>
-                </div>
-                <div id="handDevCardsList" class="hand-dev-cards-list">
-                  <!-- Render dev cards có thể kéo thả -->
+              <!-- DẠNG 2: CHẾ ĐỘ THẺ BÀI (TỪNG THẺ RIÊNG LẺ KÉO THẢ ĐƯỢC) -->
+              <div id="cardsHandView" class="cards-hand-view hidden">
+                <div id="individualCardsList" class="individual-cards-list">
+                  <!-- Render từng lá bài kéo thả được -->
                 </div>
               </div>
             </div>
