@@ -1302,15 +1302,6 @@ body.in-game-mode .pregame-only {
   background: radial-gradient(circle, #d4ac0d, #1a252f);
 }
 
-.title-badge.badge-order {
-  border-color: rgba(241, 196, 15, 0.6);
-  background: rgba(20, 26, 24, 0.95);
-  font-family: 'Cinzel', serif;
-  font-size: 0.7rem;
-  font-weight: 800;
-  color: #f1c40f;
-}
-
 /* Nội dung thông tin người chơi bên cạnh avatar */
 .p-card-content {
   flex: 1;

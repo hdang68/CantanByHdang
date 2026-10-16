@@ -110,12 +110,6 @@ export class CatanEngine {
       };
     });
 
-    // Ghi nhận sự kiện khởi tạo thứ tự chơi vào nhật ký
-    const orderNames = this.turnOrder.map(id => this.players[id]?.name || id).join(' ➔ ');
-    if (options.randomizeTurnOrder) {
-      this.logEvent(`🎲 Thứ tự lượt chơi đã được xếp ngẫu nhiên: ${orderNames}`, 'system');
-    }
-
     // Quản lý tiến trình ván đấu
     this.phase = GAME_PHASES.SETUP_ROUND_1;
     this.turnNumber = 1;

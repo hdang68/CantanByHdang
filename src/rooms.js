@@ -131,6 +131,13 @@ export function startGameInRoom(roomId, requestingSocketId, options = {}) {
     board: room.board,
     randomizeTurnOrder: shouldRandomizeOrder
   });
+
+  // Đồng bộ danh sách người chơi trong phòng theo thứ tự lượt chơi ngẫu nhiên
+  if (room.engine?.turnOrder) {
+    const orderMap = new Map(room.engine.turnOrder.map((id, index) => [id, index]));
+    room.players.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+  }
+
   room.status = 'PLAYING';
 
   return { success: true, room };

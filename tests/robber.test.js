@@ -141,7 +141,7 @@ test('Robber: Disconnected player auto-discards so game is never stuck in TURN_R
   }
 });
 
-test('Turn Order: Randomize turn order shuffles player IDs and logs event', () => {
+test('Turn Order: Randomize turn order shuffles player IDs', () => {
   const players = [
     { id: 'p1', name: 'Alice' },
     { id: 'p2', name: 'Bob' },
