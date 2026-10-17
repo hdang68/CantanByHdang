@@ -636,14 +636,50 @@ body {
 }
 
 /* ======================================================== */
-/* IN-GAME FULLSCREEN MODE (KHI ĐANG CHƠI)                  */
+/* LOBBY MODE (SẢNH CHỜ - CHỈ HIỂN THỊ KHUNG SẢNH DUY NHẤT) */
 /* ======================================================== */
-body.in-game-mode {
-  overflow: hidden;
-  height: 100vh;
+body:not(.in-game-mode) {
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 100vh;
   width: 100vw;
 }
 
+body:not(.in-game-mode) .app-header,
+body:not(.in-game-mode) .app-footer,
+body:not(.in-game-mode) .game-section,
+body:not(.in-game-mode) .floating-log-drawer {
+  display: none !important;
+}
+
+body:not(.in-game-mode) .app-container {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body:not(.in-game-mode) .main-content {
+  flex: 1;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  box-sizing: border-box;
+}
+
+body:not(.in-game-mode) .lobby-section {
+  margin: auto;
+  max-width: 920px;
+  width: 90%;
+}
+
+/* ======================================================== */
+/* IN-GAME FULLSCREEN MODE (KHI ĐANG CHƠI)                  */
+/* ======================================================== */
 body.in-game-mode {
   overflow: hidden;
   height: 100vh;
