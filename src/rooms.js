@@ -1,5 +1,10 @@
 import crypto from 'node:crypto';
-import { createStandardBoard, createRandomBoard } from './game/board.js';
+import {
+  createStandardBoard,
+  createRandomBoard,
+  create56StandardBoard,
+  create56RandomBoard
+} from './game/board.js';
 import { CatanEngine } from './game/engine.js';
 
 // Danh sách phòng lưu trong RAM
@@ -59,6 +64,8 @@ export function createRoom(hostPlayerName, socketId, isRandomBoard = false) {
     players: [hostPlayer],
     board,
     boardMode: isRandomBoard ? 'RANDOM' : 'STANDARD',
+    is56Extension: false,
+    maxPlayers: 4,
     engine: null
   };
 
@@ -81,8 +88,9 @@ export function joinRoom(roomId, playerName, socketId) {
     return { error: 'Ván chơi trong phòng này đã bắt đầu.' };
   }
 
-  if (room.players.length >= 4) {
-    return { error: 'Phòng đã đủ 4 người chơi.' };
+  const maxPlayers = room.maxPlayers || (room.is56Extension ? 6 : 4);
+  if (room.players.length >= maxPlayers) {
+    return { error: `Phòng đã đủ ${maxPlayers} người chơi.` };
   }
 
   const playerId = `p_${crypto.randomBytes(4).toString('hex')}`;
@@ -127,9 +135,12 @@ export function startGameInRoom(roomId, requestingSocketId, options = {}) {
 
   // Khởi tạo Game Engine (Mặc định xáo trộn ngẫu nhiên thứ tự chơi khi vào game)
   const shouldRandomizeOrder = options.randomizeTurnOrder !== false;
+  const is56 = Boolean(room.is56Extension || room.players.length > 4);
   room.engine = new CatanEngine(room.players, {
     board: room.board,
-    randomizeTurnOrder: shouldRandomizeOrder
+    randomizeTurnOrder: shouldRandomizeOrder,
+    is56,
+    maxPlayers: room.maxPlayers || (is56 ? 6 : 4)
   });
 
   // Đồng bộ danh sách người chơi trong phòng theo thứ tự lượt chơi ngẫu nhiên
@@ -207,7 +218,7 @@ export function randomizeRoomBoard(roomId, requestingSocketId) {
     return { success: false, error: 'Chỉ chủ phòng mới có quyền đổi bản đồ.' };
   }
 
-  room.board = createRandomBoard();
+  room.board = room.is56Extension ? create56RandomBoard() : createRandomBoard();
   room.boardMode = 'RANDOM';
   return { success: true, room };
 }
@@ -222,9 +233,36 @@ export function setStandardRoomBoard(roomId, requestingSocketId) {
     return { success: false, error: 'Chỉ chủ phòng mới có quyền đổi bản đồ.' };
   }
 
-  room.board = createStandardBoard();
+  room.board = room.is56Extension ? create56StandardBoard() : createStandardBoard();
   room.boardMode = 'STANDARD';
   return { success: true, room };
+}
+
+export function toggleRoom56Extension(roomId, requestingSocketId, is56) {
+  const room = getRoom(roomId);
+  if (!room) return { success: false, error: 'Phòng không tồn tại.' };
+  if (room.status !== 'LOBBY') return { success: false, error: 'Chỉ có thể đổi chế độ mở rộng khi đang ở sảnh chờ.' };
+
+  const requestingPlayer = room.players.find(p => p.socketId === requestingSocketId);
+  if (!requestingPlayer || !requestingPlayer.isHost) {
+    return { success: false, error: 'Chỉ chủ phòng mới có quyền bật/tắt mở rộng 5-6 người chơi.' };
+  }
+
+  const shouldEnable = Boolean(is56);
+  if (!shouldEnable && room.players.length > 4) {
+    return { success: false, error: 'Không thể tắt mở rộng khi phòng đang có nhiều hơn 4 người chơi.' };
+  }
+
+  room.is56Extension = shouldEnable;
+  room.maxPlayers = shouldEnable ? 6 : 4;
+
+  if (room.boardMode === 'RANDOM') {
+    room.board = shouldEnable ? create56RandomBoard() : createRandomBoard();
+  } else {
+    room.board = shouldEnable ? create56StandardBoard() : createStandardBoard();
+  }
+
+  return { success: true, room, is56Extension: shouldEnable, maxPlayers: room.maxPlayers };
 }
 
 export function changePlayerColor(roomId, requestingSocketId, newColorHex) {
@@ -254,6 +292,8 @@ export function getRoomPublicView(room) {
     status: room.status,
     hostId: room.hostId,
     boardMode: room.boardMode || 'STANDARD',
+    is56Extension: Boolean(room.is56Extension),
+    maxPlayers: room.maxPlayers || (room.is56Extension ? 6 : 4),
     players: room.players.map(p => ({
       id: p.id,
       name: p.name,

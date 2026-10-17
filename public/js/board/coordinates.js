@@ -10,6 +10,18 @@ export const BOARD_CONFIG = {
   CENTER_Y: 375
 };
 
+export const BOARD_CONFIG_6P = {
+  HEX_RADIUS: 56,      // Bán kính mỗi ô lục giác cho bản đồ 30 ô
+  BOARD_WIDTH: 940,    // Kích thước viewBox SVG mở rộng
+  BOARD_HEIGHT: 860,
+  CENTER_X: 470,       // Tâm của bàn cờ 30 ô
+  CENTER_Y: 430
+};
+
+export function getActiveBoardConfig(is56 = false) {
+  return is56 ? BOARD_CONFIG_6P : BOARD_CONFIG;
+};
+
 export const TERRAIN_THEMES = {
   forest: {
     name: 'Rừng (Gỗ)',
@@ -64,13 +76,24 @@ export const PORT_THEMES = {
   ore:     { label: '2:1', icon: '⛰️', fill: '#5d6d7e', text: '#ffffff' }
 };
 
+let currentActiveConfig = BOARD_CONFIG;
+
+export function setActiveBoardConfig(config) {
+  if (config) currentActiveConfig = config;
+}
+
+export function getActiveConfig() {
+  return currentActiveConfig;
+}
+
 /**
  * Chuyển tọa độ tương đối từ trung tâm sang tọa độ tuyệt đối SVG
  */
-export function toSvgCoords(x, y) {
+export function toSvgCoords(x, y, config = currentActiveConfig) {
+  const activeCfg = config || currentActiveConfig;
   return {
-    x: BOARD_CONFIG.CENTER_X + x * (BOARD_CONFIG.HEX_RADIUS / 100),
-    y: BOARD_CONFIG.CENTER_Y + y * (BOARD_CONFIG.HEX_RADIUS / 100)
+    x: activeCfg.CENTER_X + x * (activeCfg.HEX_RADIUS / 100),
+    y: activeCfg.CENTER_Y + y * (activeCfg.HEX_RADIUS / 100)
   };
 }
 

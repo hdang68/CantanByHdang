@@ -65,11 +65,63 @@ export const STANDARD_BEGINNER_SETUP = [
   { terrain: 'pasture',   number: 11 }
 ];
 
+// 30 Tọa độ Axial cho bản đồ mở rộng 5-6 người chơi (3-4-5-6-5-4-3)
+export const HEX_AXIAL_COORDS_6P = [
+  // Hàng r = -3 (3 hex)
+  { q: 0, r: -3 }, { q: 1, r: -3 }, { q: 2, r: -3 },
+  // Hàng r = -2 (4 hex)
+  { q: -1, r: -2 }, { q: 0, r: -2 }, { q: 1, r: -2 }, { q: 2, r: -2 },
+  // Hàng r = -1 (5 hex)
+  { q: -2, r: -1 }, { q: -1, r: -1 }, { q: 0, r: -1 }, { q: 1, r: -1 }, { q: 2, r: -1 },
+  // Hàng r = 0 (6 hex - đi qua tâm)
+  { q: -3, r: 0 }, { q: -2, r: 0 }, { q: -1, r: 0 }, { q: 0, r: 0 }, { q: 1, r: 0 }, { q: 2, r: 0 },
+  // Hàng r = 1 (5 hex)
+  { q: -3, r: 1 }, { q: -2, r: 1 }, { q: -1, r: 1 }, { q: 0, r: 1 }, { q: 1, r: 1 },
+  // Hàng r = 2 (4 hex)
+  { q: -3, r: 2 }, { q: -2, r: 2 }, { q: -1, r: 2 }, { q: 0, r: 2 },
+  // Hàng r = 3 (3 hex)
+  { q: -3, r: 3 }, { q: -2, r: 3 }, { q: -1, r: 3 }
+];
+
+// Cấu hình bản đồ chuẩn mở rộng 5-6 người (Official 5-6 Extension Layout: 30 ô, 2 Sa mạc, 28 số, 6 và 8 không kề nhau)
+export const STANDARD_BEGINNER_SETUP_6P = [
+  { terrain: 'fields',    number: 9 },
+  { terrain: 'pasture',   number: 11 },
+  { terrain: 'forest',    number: 8 },
+  { terrain: 'hills',     number: 10 },
+  { terrain: 'mountains', number: 6 },
+  { terrain: 'fields',    number: 2 },
+  { terrain: 'pasture',   number: 12 },
+  { terrain: 'forest',    number: 5 },
+  { terrain: 'desert',    number: null },
+  { terrain: 'forest',    number: 9 },
+  { terrain: 'hills',     number: 8 },
+  { terrain: 'mountains', number: 10 },
+  { terrain: 'pasture',   number: 6 },
+  { terrain: 'fields',    number: 11 },
+  { terrain: 'mountains', number: 4 },
+  { terrain: 'hills',     number: 10 },
+  { terrain: 'forest',    number: 12 },
+  { terrain: 'pasture',   number: 11 },
+  { terrain: 'desert',    number: null },
+  { terrain: 'fields',    number: 6 },
+  { terrain: 'pasture',   number: 3 },
+  { terrain: 'forest',    number: 4 },
+  { terrain: 'mountains', number: 3 },
+  { terrain: 'hills',     number: 2 },
+  { terrain: 'fields',    number: 9 },
+  { terrain: 'pasture',   number: 3 },
+  { terrain: 'forest',    number: 8 },
+  { terrain: 'mountains', number: 4 },
+  { terrain: 'hills',     number: 5 },
+  { terrain: 'fields',    number: 5 }
+];
+
 /**
  * Sinh cấu trúc topo đồ thị bất biến (Base Topological Graph)
  * Gồm 19 hexes, 54 vertices, 72 edges và 9 cảng.
  */
-export function buildBaseTopology(R = 100) {
+export function buildBaseTopology(coords = HEX_AXIAL_COORDS, R = 100) {
   const hexes = {};
   const vertices = {};
   const edges = {};
@@ -80,10 +132,12 @@ export function buildBaseTopology(R = 100) {
   let vCounter = 0;
   let eCounter = 0;
 
-  // Bước 1: Khởi tạo 19 Hexes và xác định các đỉnh, cạnh
-  HEX_AXIAL_COORDS.forEach((coord, hexIndex) => {
+  const is6P = (coords.length === 30);
+
+  // Bước 1: Khởi tạo Hexes và xác định các đỉnh, cạnh
+  coords.forEach((coord, hexIndex) => {
     const hexId = `hex_${hexIndex}`;
-    const cx = R * Math.sqrt(3) * (coord.q + coord.r / 2);
+    const cx = R * Math.sqrt(3) * (coord.q + coord.r / 2 + (is6P ? 0.5 : 0));
     const cy = R * 1.5 * coord.r;
 
     const hexVertexIds = [];
@@ -198,20 +252,36 @@ export function buildBaseTopology(R = 100) {
     return angleA - angleB;
   });
 
-  // Có chính xác 30 cạnh ven biển. Chọn 9 vị trí cảng cách đều và hợp lệ
-  // Các chỉ số tương ứng theo vòng tròn:
-  const portIndices = [0, 3, 7, 10, 14, 17, 21, 24, 27];
-  const standardPortTypes = [
-    PORT_TYPES.GENERIC, // 3:1
-    PORT_TYPES.WHEAT,   // 2:1 Lúa mì
-    PORT_TYPES.ORE,     // 2:1 Quặng
-    PORT_TYPES.GENERIC, // 3:1
-    PORT_TYPES.SHEEP,   // 2:1 Cừu
-    PORT_TYPES.GENERIC, // 3:1
-    PORT_TYPES.CLAY,    // 2:1 Đất sét
-    PORT_TYPES.WOOD,    // 2:1 Gỗ
-    PORT_TYPES.GENERIC  // 3:1
-  ];
+  // Chọn vị trí cảng cách đều và hợp lệ (30 cạnh ven biển cho 4P: 9 cảng; 38 cạnh cho 6P: 11 cảng)
+  const portIndices = is6P
+    ? [0, 3, 7, 10, 14, 17, 21, 24, 28, 31, 35]
+    : [0, 3, 7, 10, 14, 17, 21, 24, 27];
+
+  const standardPortTypes = is6P
+    ? [
+        PORT_TYPES.GENERIC, // 3:1
+        PORT_TYPES.WHEAT,   // 2:1 Lúa mì
+        PORT_TYPES.ORE,     // 2:1 Quặng
+        PORT_TYPES.GENERIC, // 3:1
+        PORT_TYPES.SHEEP,   // 2:1 Cừu
+        PORT_TYPES.GENERIC, // 3:1
+        PORT_TYPES.CLAY,    // 2:1 Đất sét
+        PORT_TYPES.WOOD,    // 2:1 Gỗ
+        PORT_TYPES.GENERIC, // 3:1
+        PORT_TYPES.SHEEP,   // 2:1 Cừu
+        PORT_TYPES.GENERIC  // 3:1
+      ]
+    : [
+        PORT_TYPES.GENERIC, // 3:1
+        PORT_TYPES.WHEAT,   // 2:1 Lúa mì
+        PORT_TYPES.ORE,     // 2:1 Quặng
+        PORT_TYPES.GENERIC, // 3:1
+        PORT_TYPES.SHEEP,   // 2:1 Cừu
+        PORT_TYPES.GENERIC, // 3:1
+        PORT_TYPES.CLAY,    // 2:1 Đất sét
+        PORT_TYPES.WOOD,    // 2:1 Gỗ
+        PORT_TYPES.GENERIC  // 3:1
+      ];
 
   const ports = [];
   portIndices.forEach((edgeIdx, idx) => {
@@ -242,7 +312,7 @@ export function buildBaseTopology(R = 100) {
     });
   });
 
-  return { hexes, vertices, edges, ports };
+  return { hexes, vertices, edges, ports, is56: is6P };
 }
 
 /**
@@ -356,6 +426,89 @@ export function createRandomBoard() {
   }
 
   return board;
+}
+
+/**
+ * Tạo bản đồ tiêu chuẩn mở rộng cho 5-6 người chơi (30 ô, 11 cảng)
+ */
+export function create56StandardBoard() {
+  const board = buildBaseTopology(HEX_AXIAL_COORDS_6P);
+  board.is56 = true;
+
+  STANDARD_BEGINNER_SETUP_6P.forEach((setup, index) => {
+    const hexId = `hex_${index}`;
+    const terrainDef = Object.values(TERRAINS).find(t => t.id === setup.terrain);
+
+    board.hexes[hexId].terrain = setup.terrain;
+    board.hexes[hexId].resource = terrainDef ? terrainDef.resource : null;
+    board.hexes[hexId].diceNumber = setup.number;
+    board.hexes[hexId].hasRobber = (setup.terrain === 'desert');
+  });
+
+  const desertHexes = Object.values(board.hexes).filter(h => h.terrain === 'desert');
+  board.robberHexId = desertHexes[0] ? desertHexes[0].id : 'hex_8';
+
+  return board;
+}
+
+/**
+ * Tạo bản đồ ngẫu nhiên mở rộng cho 5-6 người chơi (30 ô, 11 cảng)
+ * Tự động kiểm tra để số 6 và 8 không bao giờ kề nhau.
+ */
+export function create56RandomBoard() {
+  const board = buildBaseTopology(HEX_AXIAL_COORDS_6P);
+  board.is56 = true;
+
+  const terrainPool = [
+    'forest', 'forest', 'forest', 'forest', 'forest', 'forest',
+    'pasture', 'pasture', 'pasture', 'pasture', 'pasture', 'pasture',
+    'fields', 'fields', 'fields', 'fields', 'fields', 'fields',
+    'hills', 'hills', 'hills', 'hills', 'hills',
+    'mountains', 'mountains', 'mountains', 'mountains', 'mountains',
+    'desert', 'desert'
+  ];
+
+  const numbers6P = [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12];
+
+  let isValid = false;
+  let attempts = 0;
+
+  while (!isValid && attempts < 1000) {
+    attempts++;
+    const shuffledTerrains = shuffle(terrainPool);
+    const shuffledNumbers = shuffle(numbers6P);
+
+    let numberIdx = 0;
+    Object.keys(board.hexes).forEach((hexId, idx) => {
+      const terrainId = shuffledTerrains[idx];
+      const terrainDef = Object.values(TERRAINS).find(t => t.id === terrainId);
+
+      board.hexes[hexId].terrain = terrainId;
+      board.hexes[hexId].resource = terrainDef.resource;
+
+      if (terrainId === 'desert') {
+        board.hexes[hexId].diceNumber = null;
+        board.hexes[hexId].hasRobber = true;
+        if (!board.robberHexId) board.robberHexId = hexId;
+      } else {
+        board.hexes[hexId].diceNumber = shuffledNumbers[numberIdx++];
+        board.hexes[hexId].hasRobber = false;
+      }
+    });
+
+    if (validateRedNumbersNotAdjacent(board)) {
+      isValid = true;
+    }
+  }
+
+  return board;
+}
+
+/**
+ * Kiểm tra xem bản đồ có phải bản đồ mở rộng 5-6 người hay không
+ */
+export function is56Board(board) {
+  return Boolean(board && (board.is56 || Object.keys(board.hexes || {}).length > 19));
 }
 
 /**

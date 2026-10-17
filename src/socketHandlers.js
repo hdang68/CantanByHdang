@@ -8,6 +8,7 @@ import {
   reconnectPlayer,
   randomizeRoomBoard,
   setStandardRoomBoard,
+  toggleRoom56Extension,
   changePlayerColor
 } from './rooms.js';
 import { executePlayerTrade, createTradeOffer } from './game/trading.js';
@@ -249,6 +250,30 @@ export function setupSocketHandlers(io) {
       } catch (err) {
         console.error('[Room] Lỗi đổi chế độ map:', err);
         cb({ success: false, error: 'Không thể đổi chế độ bản đồ lúc này.' });
+      }
+    });
+
+    // 3C3. Bật / Tắt chế độ mở rộng 5-6 người chơi (Toggle switch cho chủ phòng)
+    socket.on('room:toggle_56_extension', (data, callback) => {
+      const cb = getCallback(data, callback);
+      try {
+        const roomId = socket.data.roomId;
+        if (!roomId) {
+          return cb({ success: false, error: 'Bạn chưa vào phòng.' });
+        }
+        const is56 = (data && typeof data.is56 === 'boolean') ? data.is56 : true;
+        const result = toggleRoom56Extension(roomId, socket.id, is56);
+        if (!result.success) {
+          return cb(result);
+        }
+
+        const publicView = getRoomPublicView(result.room);
+        console.log(`[Room] Chủ phòng đã ${is56 ? 'BẬT' : 'TẮT'} chế độ mở rộng 5-6 người chơi phòng ${roomId}`);
+        io.to(roomId).emit('room:state', publicView);
+        cb({ success: true, room: publicView, is56Extension: result.is56Extension, maxPlayers: result.maxPlayers });
+      } catch (err) {
+        console.error('[Room] Lỗi đổi chế độ 5-6 người chơi:', err);
+        cb({ success: false, error: err.message || 'Không thể đổi chế độ mở rộng lúc này.' });
       }
     });
 

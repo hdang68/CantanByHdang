@@ -4,6 +4,8 @@ import {
   buildBaseTopology,
   createStandardBoard,
   createRandomBoard,
+  create56StandardBoard,
+  create56RandomBoard,
   validateRedNumbersNotAdjacent,
   getProductiveHexes,
   areHexesAdjacent
@@ -144,3 +146,49 @@ test('Productive Hexes and Robber Blocking', () => {
   assert.equal(productive8.length, 1, 'Hex with robber must NOT produce resources');
   assert.equal(productive8[0].id, hexesWith8[1].id);
 });
+
+test('5-6 Player Board Extension Compliance', async (t) => {
+  const board56 = create56StandardBoard();
+
+  await t.test('Geometry counts match 5-6 Player Extension specifications', () => {
+    const hexCount = Object.keys(board56.hexes).length;
+    const vertexCount = Object.keys(board56.vertices).length;
+    const edgeCount = Object.keys(board56.edges).length;
+    const portCount = board56.ports.length;
+
+    assert.equal(hexCount, 30, 'Must have exactly 30 hex tiles');
+    assert.equal(vertexCount, 80, 'Must have exactly 80 vertices');
+    assert.equal(edgeCount, 109, 'Must have exactly 109 edges');
+    assert.equal(portCount, 11, 'Must have exactly 11 ports');
+    assert.equal(board56.is56, true, 'is56 flag must be true');
+  });
+
+  await t.test('Correct distribution of terrain tiles in 5-6 extension', () => {
+    const terrainCounts = {};
+    Object.values(board56.hexes).forEach(hex => {
+      terrainCounts[hex.terrain] = (terrainCounts[hex.terrain] || 0) + 1;
+    });
+
+    assert.equal(terrainCounts['forest'], 6, '6 Forest hexes');
+    assert.equal(terrainCounts['pasture'], 6, '6 Pasture hexes');
+    assert.equal(terrainCounts['fields'], 6, '6 Fields hexes');
+    assert.equal(terrainCounts['hills'], 5, '5 Hills hexes');
+    assert.equal(terrainCounts['mountains'], 5, '5 Mountains hexes');
+    assert.equal(terrainCounts['desert'], 2, '2 Desert hexes');
+  });
+
+  await t.test('Red numbers 6 and 8 are never adjacent on 5-6 standard board', () => {
+    const isValid = validateRedNumbersNotAdjacent(board56);
+    assert.equal(isValid, true, '5-6 map must have no adjacent 6 and 8');
+  });
+
+  await t.test('Random 5-6 board generator produces valid 30-hex board', () => {
+    for (let i = 0; i < 5; i++) {
+      const random56 = create56RandomBoard();
+      assert.equal(Object.keys(random56.hexes).length, 30);
+      assert.equal(random56.ports.length, 11);
+      assert.equal(validateRedNumbersNotAdjacent(random56), true);
+    }
+  });
+});
+

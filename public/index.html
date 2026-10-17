@@ -103,11 +103,16 @@
                 <span class="map-toggle-slider"></span>
                 <span class="map-toggle-text">🎲 Random Map</span>
               </label>
+              <label class="map-toggle-switch" title="Chủ phòng: Bật/Tắt chế độ mở rộng 5-6 người chơi (Bản đồ 30 ô, tối đa 6 người)">
+                <input type="checkbox" id="toggle56Players">
+                <span class="map-toggle-slider"></span>
+                <span class="map-toggle-text">👥 Mở rộng 5–6 người</span>
+              </label>
             </div>
           </div>
 
           <div class="room-players-panel">
-            <h3>Danh sách người chơi (<span id="playerCount">0</span>/4)</h3>
+            <h3>Danh sách người chơi (<span id="playerCount">0</span>/<span id="maxPlayerCount">4</span>)</h3>
             <div id="playerList" class="player-slots-grid">
               <!-- Rendered dynamic slots -->
             </div>

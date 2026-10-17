@@ -5,7 +5,9 @@
 
 import {
   createStandardBoard,
-  createRandomBoard
+  createRandomBoard,
+  create56StandardBoard,
+  create56RandomBoard
 } from './board.js';
 
 import {
@@ -68,13 +70,18 @@ export const GAME_PHASES = {
 
 export class CatanEngine {
   constructor(playersList, options = {}) {
-    if (!playersList || playersList.length < 2 || playersList.length > 4) {
-      throw new Error('Catan Classic yêu cầu từ 2 đến 4 người chơi (tối thiểu 3 cho ván chính thức).');
+    const maxAllowed = options.maxPlayers || (options.is56 || (playersList && playersList.length > 4) ? 6 : 4);
+    if (!playersList || playersList.length < 2 || playersList.length > maxAllowed) {
+      throw new Error(`Catan yêu cầu từ 2 đến ${maxAllowed} người chơi.`);
     }
 
-    this.board = options.board || (options.isRandomBoard ? createRandomBoard() : createStandardBoard());
-    this.bank = createInitialBank();
-    this.devCardDeck = createDevCardDeck();
+    const is56 = Boolean(options.is56 || playersList.length > 4 || (options.board && Object.keys(options.board.hexes || {}).length > 19));
+    this.is56 = is56;
+    this.board = options.board || (is56
+      ? (options.isRandomBoard ? create56RandomBoard() : create56StandardBoard())
+      : (options.isRandomBoard ? createRandomBoard() : createStandardBoard()));
+    this.bank = createInitialBank(is56 ? 24 : 19);
+    this.devCardDeck = createDevCardDeck(is56);
     this.eventLog = [];
 
     this.players = {};

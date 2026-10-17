@@ -26,6 +26,15 @@ const DEV_CARD_DISTRIBUTION = [
   ...Array(2).fill('monopoly')
 ];
 
+// Phân bổ thẻ phát triển cho bản đồ mở rộng 5-6 người (Tổng cộng 34 thẻ)
+const DEV_CARD_DISTRIBUTION_56 = [
+  ...Array(20).fill('knight'),
+  ...Array(5).fill('victory_point'),
+  ...Array(3).fill('road_building'),
+  ...Array(3).fill('year_of_plenty'),
+  ...Array(3).fill('monopoly')
+];
+
 function shuffle(array) {
   const copy = [...array];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -35,8 +44,9 @@ function shuffle(array) {
   return copy;
 }
 
-export function createDevCardDeck() {
-  const shuffledTypes = shuffle(DEV_CARD_DISTRIBUTION);
+export function createDevCardDeck(is56 = false) {
+  const dist = is56 ? DEV_CARD_DISTRIBUTION_56 : DEV_CARD_DISTRIBUTION;
+  const shuffledTypes = shuffle(dist);
   return shuffledTypes.map((type, index) => ({
     id: `dc_${index}_${type}`,
     type

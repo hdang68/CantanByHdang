@@ -173,6 +173,52 @@ test('Server & Socket.IO Multiplayer Infrastructure', async (t) => {
     assert.equal(pingBob.room.players[0].isHost, true);
   });
 
+  await t.test('Lobby: Host toggles 5-6 Player Extension, room expands to 6 slots', async () => {
+    // Bob (host) enables 5-6 player extension
+    const enable56 = await new Promise((resolve) => {
+      client2.emit('room:toggle_56_extension', { is56: true }, resolve);
+    });
+    assert.equal(enable56.success, true);
+    assert.equal(enable56.is56Extension, true);
+    assert.equal(enable56.maxPlayers, 6);
+    assert.equal(Object.keys(enable56.room.board.hexes).length, 30);
+
+    // Connect clients 3, 4, 5, 6
+    const client3 = Client(`http://localhost:${port}`);
+    const client4 = Client(`http://localhost:${port}`);
+    const client5 = Client(`http://localhost:${port}`);
+    const client6 = Client(`http://localhost:${port}`);
+
+    await Promise.all([
+      new Promise(r => client3.on('connect', r)),
+      new Promise(r => client4.on('connect', r)),
+      new Promise(r => client5.on('connect', r)),
+      new Promise(r => client6.on('connect', r))
+    ]);
+
+    const j3 = await new Promise(r => client3.emit('room:join', { roomId: createdRoomId, playerName: 'Player3' }, r));
+    const j4 = await new Promise(r => client4.emit('room:join', { roomId: createdRoomId, playerName: 'Player4' }, r));
+    const j5 = await new Promise(r => client5.emit('room:join', { roomId: createdRoomId, playerName: 'Player5' }, r));
+    const j6 = await new Promise(r => client6.emit('room:join', { roomId: createdRoomId, playerName: 'Player6' }, r));
+
+    assert.equal(j3.success, true);
+    assert.equal(j4.success, true);
+    assert.equal(j5.success, true);
+    assert.equal(j6.success, true);
+    assert.equal(j6.room.players.length, 5); // Bob + Player3 + Player4 + Player5 + Player6 = 5 players
+
+    // Host tries to disable 5-6 extension when room has > 4 players -> must fail
+    const disableFail = await new Promise(r => client2.emit('room:toggle_56_extension', { is56: false }, r));
+    assert.equal(disableFail.success, false);
+    assert.ok(disableFail.error);
+
+    // Clean up extra clients
+    client3.disconnect();
+    client4.disconnect();
+    client5.disconnect();
+    client6.disconnect();
+  });
+
   // Teardown
   if (client1) client1.disconnect();
   if (client2) client2.disconnect();

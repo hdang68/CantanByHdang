@@ -97,6 +97,8 @@ const waitingNote = document.getElementById('waitingNote');
 const lobbyBoardBadge = document.getElementById('lobbyBoardBadge');
 const lobbyHostMapActions = document.getElementById('lobbyHostMapActions');
 const toggleRandomBoard = document.getElementById('toggleRandomBoard');
+const toggle56Players = document.getElementById('toggle56Players');
+const maxPlayerCount = document.getElementById('maxPlayerCount');
 
 // 1. CỘT TRÁI (LEFT PANEL): 4 Người chơi & Túi thẻ
 const inGameLeftPanel = document.getElementById('inGameLeftPanel');
@@ -1313,15 +1315,17 @@ function processUniversalResourceDiffs(prevSnapshot, currentPlayers) {
   });
 }
 
-// Cấu hình 4 vị trí người chơi tiêu chuẩn của Catan Classic (Đỏ, Xanh, Cam, Trắng)
+// Cấu hình các vị trí người chơi tiêu chuẩn của Catan (Đỏ, Xanh, Cam, Trắng, Xanh lá, Tím)
 const STANDARD_PLAYER_SLOTS = [
   { name: 'Đỏ', hex: '#e74c3c' },
   { name: 'Xanh dương', hex: '#3498db' },
   { name: 'Cam', hex: '#e67e22' },
-  { name: 'Trắng', hex: '#ecf0f1' }
+  { name: 'Trắng', hex: '#ecf0f1' },
+  { name: 'Xanh lá', hex: '#2ecc71' },
+  { name: 'Tím', hex: '#9b59b6' }
 ];
 
-// Render danh sách người chơi ở Khung Người Chơi (Luôn đảm bảo hiện đầy đủ 4 người chơi)
+// Render danh sách người chơi ở Khung Người Chơi (Hiển thị đầy đủ 4 hoặc 6 vị trí ghế)
 function renderLeftPlayersPanel(gameState) {
   const targetBar = document.querySelector('#hudPlayersWidget #hudOtherPlayersBar') || document.getElementById('hudOtherPlayersBar');
   if (!targetBar) return;
@@ -1333,8 +1337,12 @@ function renderLeftPlayersPanel(gameState) {
   const order = gameState?.turnOrder || (gameState?.players ? Object.keys(gameState.players) : []);
   const activePlayers = order.map(pId => gameState?.players?.[pId]).filter(Boolean);
 
-  // Luôn duyệt và hiển thị đầy đủ 4 vị trí ghế người chơi
-  for (let i = 0; i < 4; i++) {
+  const totalSlots = (gameState?.players && Object.keys(gameState.players).length > 4) ||
+    state.room?.is56Extension ||
+    (state.board && Object.keys(state.board.hexes || {}).length > 19) ? 6 : 4;
+
+  // Luôn duyệt và hiển thị đầy đủ các vị trí ghế người chơi
+  for (let i = 0; i < totalSlots; i++) {
     const p = activePlayers[i];
     const std = STANDARD_PLAYER_SLOTS[i] || { name: `Vị trí ${i + 1}`, hex: '#999' };
 
@@ -2915,22 +2923,41 @@ function renderPlayerSlots(room) {
   });
 
   state.room = room;
+  const maxSlots = room.maxPlayers || (room.is56Extension ? 6 : 4);
   playerCount.textContent = room.players.length;
+  if (maxPlayerCount) maxPlayerCount.textContent = maxSlots;
   playerList.innerHTML = '';
 
   // 3. Cập nhật trạng thái bản đồ và quyền điều khiển map của chủ phòng trong sảnh chờ
   const isRandom = (room.boardMode === 'RANDOM');
+  const is56 = Boolean(room.is56Extension);
   if (lobbyBoardBadge) {
-    lobbyBoardBadge.textContent = isRandom ? '🎲 Bản đồ Ngẫu nhiên' : '🗺️ Bản đồ Tiêu chuẩn';
+    let modeText = '';
+    if (is56) {
+      modeText = isRandom ? '🎲 Random Map (5–6 người)' : '🗺️ Bản đồ Mở rộng (5–6 người)';
+    } else {
+      modeText = isRandom ? '🎲 Bản đồ Ngẫu nhiên' : '🗺️ Bản đồ Tiêu chuẩn';
+    }
+    lobbyBoardBadge.textContent = modeText;
     lobbyBoardBadge.classList.toggle('random-mode', isRandom);
   }
   if (boardModeBadge) {
-    boardModeBadge.textContent = isRandom ? '🎲 Bản đồ Ngẫu nhiên' : '🗺️ Bản đồ Tiêu chuẩn';
+    let modeText = '';
+    if (is56) {
+      modeText = isRandom ? '🎲 Random Map (5–6 người)' : '🗺️ Bản đồ Mở rộng (5–6 người)';
+    } else {
+      modeText = isRandom ? '🎲 Bản đồ Ngẫu nhiên' : '🗺️ Bản đồ Tiêu chuẩn';
+    }
+    boardModeBadge.textContent = modeText;
     boardModeBadge.classList.toggle('random-mode', isRandom);
   }
   if (toggleRandomBoard) {
     toggleRandomBoard.checked = isRandom;
     toggleRandomBoard.disabled = !isHost;
+  }
+  if (toggle56Players) {
+    toggle56Players.checked = is56;
+    toggle56Players.disabled = !isHost;
   }
   if (lobbyHostMapActions) {
     lobbyHostMapActions.style.display = isHost ? 'flex' : 'none';
@@ -2945,7 +2972,7 @@ function renderPlayerSlots(room) {
     { name: 'Tím', hex: '#9b59b6' }
   ];
 
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < maxSlots; i++) {
     const player = room.players[i];
     const slot = document.createElement('div');
 
@@ -3102,6 +3129,12 @@ function showJoinView() {
   }
   if (toggleRandomBoard) {
     toggleRandomBoard.checked = false;
+  }
+  if (toggle56Players) {
+    toggle56Players.checked = false;
+  }
+  if (maxPlayerCount) {
+    maxPlayerCount.textContent = '4';
   }
 
   // Xóa mã phòng trên URL nếu có
@@ -3572,6 +3605,34 @@ async function init() {
       toggleRandomBoard.checked = !isChecked;
     } finally {
       toggleRandomBoard.disabled = !state.isHost;
+    }
+  });
+
+  // Bật / Tắt chế độ Mở rộng 5-6 người chơi (Chỉ chủ phòng)
+  toggle56Players?.addEventListener('change', async () => {
+    if (!state.isHost) return;
+    const isChecked = toggle56Players.checked;
+    sound.playBop();
+    toggle56Players.disabled = true;
+    try {
+      const res = await emitAsync('room:toggle_56_extension', { is56: isChecked });
+      if (!res.success) {
+        sound.playFail();
+        alert(res.error);
+        toggle56Players.checked = !isChecked;
+      } else {
+        sound.playSuccess();
+        const modeText = isChecked
+          ? 'Đã BẬT chế độ mở rộng 5–6 người chơi (Bản đồ 30 ô, tối đa 6 người)'
+          : 'Đã TẮT chế độ mở rộng (Bản đồ tiêu chuẩn, tối đa 4 người)';
+        addLog(modeText, 'event');
+      }
+    } catch (err) {
+      sound.playFail();
+      alert(err.message);
+      toggle56Players.checked = !isChecked;
+    } finally {
+      toggle56Players.disabled = !state.isHost;
     }
   });
 

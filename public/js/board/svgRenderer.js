@@ -6,6 +6,8 @@
 import Panzoom from '/vendor/panzoom.es.js';
 import {
   BOARD_CONFIG,
+  BOARD_CONFIG_6P,
+  setActiveBoardConfig,
   TERRAIN_THEMES,
   PORT_THEMES,
   toSvgCoords,
@@ -31,6 +33,10 @@ export class SvgBoardRenderer {
     this.board = boardData;
     this.options = options; // { onVertexClick, onEdgeClick, onHexClick, onPortClick }
 
+    this.is56 = Boolean(boardData?.is56 || Object.keys(boardData?.hexes || {}).length > 19);
+    this.config = this.is56 ? BOARD_CONFIG_6P : BOARD_CONFIG;
+    setActiveBoardConfig(this.config);
+
     this.svg = null;
     this.panzoom = null;
     this._wheelHandler = null;
@@ -52,12 +58,12 @@ export class SvgBoardRenderer {
       edges: Object.fromEntries(Object.entries(boardData?.edges || {}).map(([id, e]) => [id, { road: e.road ? { ...e.road } : null }]))
     };
 
-    // ViewBox chuẩn cố định của bàn Catan
+    // ViewBox chuẩn của bàn Catan (thích ứng 4P hoặc 5-6P)
     this.viewBox = {
       x: 0,
       y: 0,
-      width: BOARD_CONFIG.BOARD_WIDTH,
-      height: BOARD_CONFIG.BOARD_HEIGHT
+      width: this.config.BOARD_WIDTH,
+      height: this.config.BOARD_HEIGHT
     };
 
     this.render();
@@ -67,11 +73,12 @@ export class SvgBoardRenderer {
    * Khởi tạo và render toàn bộ cấu trúc SVG
    */
   render() {
+    setActiveBoardConfig(this.config);
     this.container.innerHTML = '';
 
-    const { BOARD_WIDTH, BOARD_HEIGHT } = BOARD_CONFIG;
+    const { BOARD_WIDTH, BOARD_HEIGHT } = this.config;
 
-    // Tạo thẻ SVG chính với viewBox chuẩn cố định 850x750
+    // Tạo thẻ SVG chính với viewBox chuẩn (thích ứng 4P hoặc 5-6P)
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.svg.setAttribute('viewBox', `0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`);
     this.svg.setAttribute('class', 'catan-board-svg');
@@ -167,17 +174,17 @@ export class SvgBoardRenderer {
 
     // Nước biển sử dụng ảnh pattern-ocean với fallback gradient
     const oceanCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    oceanCircle.setAttribute('cx', BOARD_CONFIG.CENTER_X);
-    oceanCircle.setAttribute('cy', BOARD_CONFIG.CENTER_Y);
-    oceanCircle.setAttribute('r', BOARD_CONFIG.HEX_RADIUS * 5.2);
+    oceanCircle.setAttribute('cx', this.config.CENTER_X);
+    oceanCircle.setAttribute('cy', this.config.CENTER_Y);
+    oceanCircle.setAttribute('r', this.config.HEX_RADIUS * (this.is56 ? 6.8 : 5.2));
     oceanCircle.setAttribute('fill', 'url(#pattern-ocean)');
     oceanGroup.appendChild(oceanCircle);
 
     // Vành sóng nước trang trí
     const waveRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    waveRing.setAttribute('cx', BOARD_CONFIG.CENTER_X);
-    waveRing.setAttribute('cy', BOARD_CONFIG.CENTER_Y);
-    waveRing.setAttribute('r', BOARD_CONFIG.HEX_RADIUS * 4.6);
+    waveRing.setAttribute('cx', this.config.CENTER_X);
+    waveRing.setAttribute('cy', this.config.CENTER_Y);
+    waveRing.setAttribute('r', this.config.HEX_RADIUS * (this.is56 ? 6.0 : 4.6));
     waveRing.setAttribute('fill', 'none');
     waveRing.setAttribute('stroke', 'rgba(255, 255, 255, 0.15)');
     waveRing.setAttribute('stroke-width', '4');
@@ -188,7 +195,7 @@ export class SvgBoardRenderer {
   }
 
   /**
-   * Vẽ 9 Cảng trên các đỉnh ven biển
+   * Vẽ Cảng trên các đỉnh ven biển
    */
   renderPorts() {
     const portsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -205,8 +212,8 @@ export class SvgBoardRenderer {
       const midY = (p1.y + p2.y) / 2;
 
       // Vector hướng ra phía ngoài biển từ tâm đảo
-      const dx = midX - BOARD_CONFIG.CENTER_X;
-      const dy = midY - BOARD_CONFIG.CENTER_Y;
+      const dx = midX - this.config.CENTER_X;
+      const dy = midY - this.config.CENTER_Y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const offset = 42; // Đẩy cảng ra xa đảo 42px
       const portX = midX + (dx / dist) * offset;
@@ -300,7 +307,7 @@ export class SvgBoardRenderer {
     Object.values(this.board.hexes).forEach(hex => {
       const center = toSvgCoords(hex.center.x, hex.center.y);
       const theme = TERRAIN_THEMES[hex.terrain] || TERRAIN_THEMES.desert;
-      const points = getHexPolygonPoints(center.x, center.y, BOARD_CONFIG.HEX_RADIUS);
+      const points = getHexPolygonPoints(center.x, center.y, this.config.HEX_RADIUS);
 
       const hexElem = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       hexElem.setAttribute('class', `hex-tile hex-${hex.terrain}`);

@@ -12,14 +12,15 @@ export const BUILDING_COSTS = {
 };
 
 export const INITIAL_BANK_AMOUNT = 19;
+export const INITIAL_BANK_AMOUNT_56 = 24;
 
-export function createInitialBank() {
+export function createInitialBank(amount = INITIAL_BANK_AMOUNT) {
   return {
-    wood: INITIAL_BANK_AMOUNT,
-    clay: INITIAL_BANK_AMOUNT,
-    sheep: INITIAL_BANK_AMOUNT,
-    wheat: INITIAL_BANK_AMOUNT,
-    ore: INITIAL_BANK_AMOUNT
+    wood: amount,
+    clay: amount,
+    sheep: amount,
+    wheat: amount,
+    ore: amount
   };
 }
 
