@@ -46,7 +46,7 @@ const state = {
   prevPlayersSnapshot: null,
   draggedData: null,
   cardZoomIndex: 1, // 0: small, 1: medium, 2: large
-  handViewMode: localStorage.getItem('catan_hand_view_mode') || 'compact' // 'compact' | 'cards'
+  handViewMode: localStorage.getItem('catan_hand_view_mode') || 'cards' // 'cards' | 'compact'
 };
 
 // Phục hồi phiên trước đó từ sessionStorage ngay khi nạp trang (tránh gián đoạn khi F5)
@@ -74,7 +74,7 @@ const connectionPill = document.getElementById('connectionPill');
 const connectionText = document.getElementById('connectionText');
 const latencyValue = document.getElementById('latencyValue');
 const btnPing = document.getElementById('btnPing');
-const btnToggleBoardView = document.getElementById('btnToggleBoardView');
+const btnOpenSettingsHeader = document.getElementById('btnOpenSettingsHeader');
 
 // Lobby & Rooms
 const lobbySection = document.getElementById('lobbySection');
@@ -129,6 +129,7 @@ const svgBoardContainer = document.getElementById('svgBoardContainer');
 const btnZoomIn = document.getElementById('btnZoomIn');
 const btnZoomOut = document.getElementById('btnZoomOut');
 const btnZoomReset = document.getElementById('btnZoomReset');
+const btnOpenSettingsBoard = document.getElementById('btnOpenSettingsBoard');
 
 const buildingDock = document.getElementById('buildingDock');
 const dragTokenSettlement = document.getElementById('dragTokenSettlement');
@@ -250,6 +251,15 @@ const btnConfirmMonopoly = document.getElementById('btnConfirmMonopoly');
 const modalVictory = document.getElementById('modalVictory');
 const victoryWinnerName = document.getElementById('victoryWinnerName');
 const btnVictoryBackToLobby = document.getElementById('btnVictoryBackToLobby');
+
+// Modal 6: Game Settings (Cài đặt trò chơi)
+const modalSettings = document.getElementById('modalSettings');
+const btnCloseSettingsModal = document.getElementById('btnCloseSettingsModal');
+const btnSettingsMute = document.getElementById('btnSettingsMute');
+const settingsVolumeSlider = document.getElementById('settingsVolumeSlider');
+const settingsVolumePercent = document.getElementById('settingsVolumePercent');
+const btnSettingsResetZoom = document.getElementById('btnSettingsResetZoom');
+const btnSettingsLeaveGame = document.getElementById('btnSettingsLeaveGame');
 
 // Tên và Biểu tượng của 5 loại tài nguyên
 const RESOURCE_NAMES = {
@@ -1498,7 +1508,7 @@ function renderHandDevCards(devCards, isMyTurn, phase) {
 }
 
 // ========================================================
-// HỆ THỐNG CHUYỂN ĐỔI CHẾ ĐỘ XEM TÚI THẺ (COMPACT VS CARDS)
+// HỆ THỐNG CÀI ĐẶT TRÒ CHƠI & CHẾ ĐỘ TÚI THẺ
 // ========================================================
 
 // Áp dụng chế độ xem túi thẻ (Ô đếm số lượng vs Từng thẻ bài kéo thả)
@@ -1508,32 +1518,49 @@ function applyHandViewMode(mode = state.handViewMode) {
 
   if (compactHandView) compactHandView.classList.toggle('hidden', isCards);
   if (cardsHandView) cardsHandView.classList.toggle('hidden', !isCards);
-  if (viewerHandSection) viewerHandSection.classList.toggle('hand-mode-cards', isCards);
 
-  if (handViewModeIcon) {
-    handViewModeIcon.textContent = isCards ? '🔢' : '🃏';
-  }
-  if (handViewModeLabel) {
-    handViewModeLabel.textContent = isCards ? 'Ô đếm' : 'Thẻ bài';
-  }
-  if (btnToggleHandViewMode) {
-    btnToggleHandViewMode.title = isCards ? 'Chuyển về dạng: Ô đếm số lượng' : 'Chuyển sang dạng: Từng thẻ bài kéo thả';
-  }
+  // Đồng bộ radio button trong mục Cài Đặt
+  const radio = document.querySelector(`input[name="handViewModeRadio"][value="${mode}"]`);
+  if (radio) radio.checked = true;
 }
 
-// Chuyển đổi qua lại giữa 2 chế độ xem túi thẻ
-function toggleHandViewMode() {
-  const nextMode = (state.handViewMode === 'cards') ? 'compact' : 'cards';
+// Chuyển đổi chế độ xem túi thẻ
+function setHandViewMode(newMode) {
   sound?.playBop?.();
-  localStorage.setItem('catan_hand_view_mode', nextMode);
-  applyHandViewMode(nextMode);
+  state.handViewMode = newMode;
+  localStorage.setItem('catan_hand_view_mode', newMode);
+  applyHandViewMode(newMode);
 
-  // Nếu đang có dữ liệu người chơi, render lại danh sách thẻ ngay
   if (state.gameState && state.playerId) {
     const myData = state.gameState.players?.[state.playerId];
     const isMyTurn = (state.gameState.currentTurnPlayerId === state.playerId);
     renderIndividualCards(myData, isMyTurn, state.gameState.phase);
   }
+}
+
+// Mở hộp thoại Cài đặt trò chơi
+function openSettingsModal() {
+  sound?.playBop?.();
+  const curVol = sound.getVolume();
+  const isMuted = sound.isMuted();
+
+  if (settingsVolumeSlider) settingsVolumeSlider.value = isMuted ? 0 : Math.round(curVol * 100);
+  if (settingsVolumePercent) settingsVolumePercent.textContent = isMuted ? '0%' : `${Math.round(curVol * 100)}%`;
+  if (btnSettingsMute) {
+    btnSettingsMute.textContent = isMuted ? '🔇' : (curVol < 0.35 ? '🔈' : (curVol < 0.7 ? '🔉' : '🔊'));
+    btnSettingsMute.classList.toggle('muted', isMuted);
+  }
+
+  const radio = document.querySelector(`input[name="handViewModeRadio"][value="${state.handViewMode}"]`);
+  if (radio) radio.checked = true;
+
+  modalSettings?.classList.remove('hidden');
+}
+
+// Đóng hộp thoại Cài đặt trò chơi
+function closeSettingsModal() {
+  sound?.playBop?.();
+  modalSettings?.classList.add('hidden');
 }
 
 // Render từng lá bài tài nguyên và thẻ phát triển riêng lẻ (Chế độ Thẻ bài kéo thả)
@@ -1891,9 +1918,8 @@ function makeTabDraggable(element, handleElement = null) {
 }
 
 function setupDraggableTabs() {
-  // Chú ý: hudPlayersWidget là tab CỐ ĐỊNH, không được kéo thả di chuyển
+  // Chú ý: hudPlayersWidget và viewerHandSection là tab CỐ ĐỊNH, không được kéo thả di chuyển
   const tabs = [
-    { el: document.getElementById('viewerHandSection'), handle: null },
     { el: document.getElementById('hudDiceWidget'), handle: null },
     { el: document.getElementById('hudBankWidget'), handle: null },
     { el: document.getElementById('buildingDock'), handle: document.querySelector('.dock-drag-handle') },
@@ -2921,29 +2947,17 @@ async function init() {
     if (soundIconHeader) soundIconHeader.textContent = icon;
     if (soundTextHeader) soundTextHeader.textContent = isMuted ? 'Tắt tiếng' : `${volPercent}%`;
 
-    if (btnToggleSoundHeader) {
-      btnToggleSoundHeader.classList.toggle('muted', isMuted);
-    }
-    if (btnToggleSoundBoard) {
-      btnToggleSoundBoard.textContent = icon;
-      btnToggleSoundBoard.classList.toggle('muted', isMuted);
+    if (btnSettingsMute) {
+      btnSettingsMute.textContent = icon;
+      btnSettingsMute.classList.toggle('muted', isMuted);
     }
 
-    if (btnQuickMuteHeader) btnQuickMuteHeader.textContent = icon;
-    if (btnQuickMuteBoard) btnQuickMuteBoard.textContent = icon;
-
-    if (volumeSliderHeader) {
-      volumeSliderHeader.value = isMuted ? 0 : volPercent;
-    }
-    if (volumeSliderBoard) {
-      volumeSliderBoard.value = isMuted ? 0 : volPercent;
+    if (settingsVolumeSlider) {
+      settingsVolumeSlider.value = isMuted ? 0 : volPercent;
     }
 
-    if (volumePercentHeader) {
-      volumePercentHeader.textContent = isMuted ? '0%' : `${volPercent}%`;
-    }
-    if (volumePercentBoard) {
-      volumePercentBoard.textContent = isMuted ? '0%' : `${volPercent}%`;
+    if (settingsVolumePercent) {
+      settingsVolumePercent.textContent = isMuted ? '0%' : `${volPercent}%`;
     }
 
     // Cập nhật trạng thái active của các nút preset
@@ -2956,41 +2970,22 @@ async function init() {
   sound.onChange(updateSoundUI);
   updateSoundUI({ muted: sound.isMuted(), volume: sound.getVolume() });
 
-  // Nhấp nút chính: Bật / Tắt tiếng nhanh
-  btnToggleSoundHeader?.addEventListener('click', () => {
+  // Nút bật / tắt tiếng trong Cài Đặt
+  btnSettingsMute?.addEventListener('click', () => {
     sound.toggleMute();
     sound.playBop();
   });
 
-  btnToggleSoundBoard?.addEventListener('click', () => {
-    sound.toggleMute();
-    sound.playBop();
-  });
-
-  btnQuickMuteHeader?.addEventListener('click', () => {
-    sound.toggleMute();
-    sound.playBop();
-  });
-
-  btnQuickMuteBoard?.addEventListener('click', () => {
-    sound.toggleMute();
-    sound.playBop();
-  });
-
-  // Kéo thanh trượt âm lượng
-  function handleSliderInput(e) {
+  // Kéo thanh trượt âm lượng trong Cài Đặt
+  settingsVolumeSlider?.addEventListener('input', (e) => {
     const val = parseInt(e.target.value, 10);
     sound.setVolume(val / 100);
 
-    // Phát tiếng bop nhẹ test âm lượng tức thời (debounced 150ms)
     clearTimeout(testSoundDebounce);
     testSoundDebounce = setTimeout(() => {
       sound.playBop();
     }, 150);
-  }
-
-  volumeSliderHeader?.addEventListener('input', handleSliderInput);
-  volumeSliderBoard?.addEventListener('input', handleSliderInput);
+  });
 
   // Các nút chọn mức âm lượng nhanh (0%, 30%, 65%, 100%)
   document.querySelectorAll('.btn-vol-preset').forEach(btn => {
@@ -3002,38 +2997,67 @@ async function init() {
     });
   });
 
-  // 5. Thu gọn và Mở rộng Túi Thẻ của người chơi (Collapse & Expand Hand)
-  let isHandCollapsed = false;
-  function toggleHandCollapse(forceState = null) {
-    isHandCollapsed = (forceState !== null) ? forceState : !isHandCollapsed;
-    if (isHandCollapsed) {
-      viewerHandSection?.classList.add('collapsed');
-      if (handToggleIcon) handToggleIcon.textContent = '▲';
-      if (handToggleLabel) handToggleLabel.textContent = 'Mở rộng';
-      if (handCardsSummaryBadge) handCardsSummaryBadge.classList.remove('hidden');
-    } else {
-      viewerHandSection?.classList.remove('collapsed');
-      if (handToggleIcon) handToggleIcon.textContent = '▼';
-      if (handToggleLabel) handToggleLabel.textContent = 'Thu gọn';
-      if (handCardsSummaryBadge) handCardsSummaryBadge.classList.add('hidden');
-    }
-  }
-
-  btnToggleHandCollapse?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleHandCollapse();
-  });
-
-  handHeader?.addEventListener('dblclick', (e) => {
-    e.stopPropagation();
-    toggleHandCollapse();
-  });
-
-  // 5B. Chuyển đổi chế độ xem túi thẻ (Ô đếm số lượng vs Từng thẻ bài kéo thả)
+  // 5. Cài Đặt Trò Chơi (Settings Modal Wiring)
   applyHandViewMode();
-  btnToggleHandViewMode?.addEventListener('click', (e) => {
+
+  btnOpenSettingsHeader?.addEventListener('click', (e) => {
     e.stopPropagation();
-    toggleHandViewMode();
+    openSettingsModal();
+  });
+
+  btnOpenSettingsBoard?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openSettingsModal();
+  });
+
+  btnCloseSettingsModal?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeSettingsModal();
+  });
+
+  modalSettings?.addEventListener('click', (e) => {
+    if (e.target === modalSettings) {
+      closeSettingsModal();
+    }
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalSettings && !modalSettings.classList.contains('hidden')) {
+      closeSettingsModal();
+    }
+  });
+
+  // Chuyển đổi chế độ túi thẻ qua Radio Card trong Cài Đặt
+  document.querySelectorAll('input[name="handViewModeRadio"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      setHandViewMode(e.target.value);
+    });
+  });
+
+  // Nút Đặt lại góc nhìn bàn cờ trong Cài Đặt
+  btnSettingsResetZoom?.addEventListener('click', () => {
+    sound.playBop();
+    state.boardRenderer?.resetZoom();
+    closeSettingsModal();
+  });
+
+  // Nút Thoát game / Rời phòng trong Cài Đặt
+  btnSettingsLeaveGame?.addEventListener('click', async () => {
+    sound.playBop();
+    const confirmed = confirm('Bạn có chắc chắn muốn rời phòng / thoát ván chơi hiện tại và quay về sảnh chính không?');
+    if (!confirmed) return;
+
+    closeSettingsModal();
+    btnSettingsLeaveGame.disabled = true;
+    try {
+      await emitAsync('room:leave');
+    } catch (err) {
+      console.warn('Lỗi khi rời phòng:', err);
+    } finally {
+      btnSettingsLeaveGame.disabled = false;
+      showJoinView();
+      addLog('Bạn đã thoát khỏi ván đấu và quay về sảnh chờ.', 'system');
+    }
   });
 
   // 6. Ping & Logs
@@ -3072,8 +3096,8 @@ async function init() {
     toggleLogCollapse();
   });
 
-  btnToggleBoardView.addEventListener('click', () => {
-    document.getElementById('gameSection').scrollIntoView({ behavior: 'smooth' });
+  btnToggleBoardView?.addEventListener('click', () => {
+    document.getElementById('gameSection')?.scrollIntoView({ behavior: 'smooth' });
   });
 
   // 7. Tạo & Vào phòng

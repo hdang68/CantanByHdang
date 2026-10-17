@@ -19,34 +19,9 @@
       </div>
 
       <div class="nav-controls">
-        <button id="btnToggleBoardView" class="btn btn-secondary btn-sm">
-          🗺️ Bàn Cờ
+        <button id="btnOpenSettingsHeader" class="btn btn-secondary btn-sm btn-settings-trigger" title="Cài đặt trò chơi (Âm thanh, Chế độ thẻ, Thoát game)">
+          ⚙️ Cài đặt
         </button>
-
-        <!-- Khung Điều Chỉnh Âm Lượng Header -->
-        <div class="volume-control-wrapper" id="headerVolumeWrapper">
-          <button id="btnToggleSoundHeader" class="btn btn-secondary btn-sm btn-sound-trigger" title="Nhấp để bật/tắt tiếng, rê chuột để chỉnh âm lượng">
-            <span id="soundIconHeader">🔊</span> <span id="soundTextHeader">50%</span>
-          </button>
-          <div class="volume-popover" id="headerVolumePopover">
-            <div class="volume-popover-inner">
-              <div class="volume-header-row">
-                <span class="volume-title">Âm lượng</span>
-                <span id="volumePercentHeader" class="volume-val-badge">50%</span>
-              </div>
-              <div class="volume-slider-row">
-                <button type="button" class="btn-vol-mute-icon" id="btnQuickMuteHeader" title="Tắt / Bật tiếng">🔊</button>
-                <input type="range" id="volumeSliderHeader" min="0" max="100" value="50" class="volume-range-slider" aria-label="Âm lượng trò chơi">
-              </div>
-              <div class="volume-preset-buttons">
-                <button type="button" class="btn-vol-preset" data-vol="0">0%</button>
-                <button type="button" class="btn-vol-preset" data-vol="30">30%</button>
-                <button type="button" class="btn-vol-preset" data-vol="65">65%</button>
-                <button type="button" class="btn-vol-preset" data-vol="100">100%</button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="connection-status-bar">
@@ -190,110 +165,67 @@
             </div>
           </div>
 
-          <!-- 2. KHUNG THẺ VÀ TÀI NGUYÊN (TÚI THẺ - CÓ THỂ KÉO THẢ & THU GỌN / MỞ RỘNG) -->
-          <div id="viewerHandSection" class="hud-floating-tab viewer-hand-section">
-            <div class="hud-tab-header hand-header" id="handHeader">
-              <div class="hud-header-left">
-                <span class="hud-drag-handle" title="Kéo để di chuyển tab này">⠿</span>
-                <span class="hand-title">🎴 TÚI THẺ CỦA BẠN</span>
-                <span id="handCardsSummaryBadge" class="hand-summary-badge hidden">0 thẻ</span>
+          <!-- 2. KHUNG THẺ VÀ TÀI NGUYÊN (TỪNG LÁ BÀI RIÊNG LẺ TRÊN MẶT BÀN CỜ) -->
+          <div id="viewerHandSection" class="viewer-hand-section" title="Kéo thẻ từ tay vào Ngân hàng, Người chơi hoặc Cảng để giao dịch!">
+            <!-- DẠNG 1: Ô ĐẾM SỐ LƯỢNG (KHI CHỌN TRONG CÀI ĐẶT) -->
+            <div id="compactHandView" class="compact-hand-view hidden">
+              <!-- Thẻ tài nguyên có thể kéo thả -->
+              <div id="resourceCardsGrid" class="resource-cards-grid">
+                <div class="res-card-item wood" data-res="wood" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">🌲</div>
+                  <div class="card-name">Gỗ</div>
+                  <div class="card-count" id="resWoodCount">0</div>
+                </div>
+                <div class="res-card-item clay" data-res="clay" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">🧱</div>
+                  <div class="card-name">Sét</div>
+                  <div class="card-count" id="resClayCount">0</div>
+                </div>
+                <div class="res-card-item sheep" data-res="sheep" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">🐑</div>
+                  <div class="card-name">Cừu</div>
+                  <div class="card-count" id="resSheepCount">0</div>
+                </div>
+                <div class="res-card-item wheat" data-res="wheat" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">🌾</div>
+                  <div class="card-name">Mì</div>
+                  <div class="card-count" id="resWheatCount">0</div>
+                </div>
+                <div class="res-card-item ore" data-res="ore" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
+                  <div class="card-icon">⛰️</div>
+                  <div class="card-name">Quặng</div>
+                  <div class="card-count" id="resOreCount">0</div>
+                </div>
               </div>
-              <div class="hand-controls">
-                <button id="btnToggleHandViewMode" class="btn-toggle-hand btn-view-mode" title="Chuyển dạng: Ô đếm / Thẻ bài">
-                  <span id="handViewModeIcon">🃏</span>
-                  <span id="handViewModeLabel" class="toggle-label">Thẻ bài</span>
-                </button>
-                <button id="btnToggleHandCollapse" class="btn-toggle-hand" title="Thu gọn / Mở rộng túi thẻ">
-                  <span id="handToggleIcon">▼</span>
-                  <span id="handToggleLabel" class="toggle-label">Thu gọn</span>
-                </button>
+
+              <!-- Thẻ phát triển trong tay (Kéo thả ra bàn để đánh thẻ) -->
+              <div class="hand-dev-section">
+                <div class="dev-header">
+                  <span>🃏 THẺ PHÁT TRIỂN (<strong id="myDevCardsBadge">0</strong>)</span>
+                  <button id="btnOpenDevCards" class="btn btn-outline btn-xs">Chi tiết</button>
+                </div>
+                <div id="handDevCardsList" class="hand-dev-cards-list">
+                  <!-- Render dev cards có thể kéo thả -->
+                </div>
               </div>
             </div>
 
-            <!-- Thân túi thẻ (Có thể thu gọn / mở rộng) -->
-            <div id="handBodyContainer" class="hand-body-container">
-              <!-- DẠNG 1: Ô ĐẾM SỐ LƯỢNG (MẶC ĐỊNH NHƯ HIỆN TẠI) -->
-              <div id="compactHandView" class="compact-hand-view">
-                <!-- Thẻ tài nguyên có thể kéo thả -->
-                <div id="resourceCardsGrid" class="resource-cards-grid">
-                  <div class="res-card-item wood" data-res="wood" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                    <div class="card-icon">🌲</div>
-                    <div class="card-name">Gỗ</div>
-                    <div class="card-count" id="resWoodCount">0</div>
-                  </div>
-                  <div class="res-card-item clay" data-res="clay" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                    <div class="card-icon">🧱</div>
-                    <div class="card-name">Sét</div>
-                    <div class="card-count" id="resClayCount">0</div>
-                  </div>
-                  <div class="res-card-item sheep" data-res="sheep" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                    <div class="card-icon">🐑</div>
-                    <div class="card-name">Cừu</div>
-                    <div class="card-count" id="resSheepCount">0</div>
-                  </div>
-                  <div class="res-card-item wheat" data-res="wheat" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                    <div class="card-icon">🌾</div>
-                    <div class="card-name">Mì</div>
-                    <div class="card-count" id="resWheatCount">0</div>
-                  </div>
-                  <div class="res-card-item ore" data-res="ore" draggable="true" title="Kéo thả vào Ngân hàng để đổi, hoặc vào người chơi để Trade!">
-                    <div class="card-icon">⛰️</div>
-                    <div class="card-name">Quặng</div>
-                    <div class="card-count" id="resOreCount">0</div>
-                  </div>
-                </div>
-
-                <!-- Thẻ phát triển trong tay (Kéo thả ra bàn để đánh thẻ) -->
-                <div class="hand-dev-section">
-                  <div class="dev-header">
-                    <span>🃏 THẺ PHÁT TRIỂN (<strong id="myDevCardsBadge">0</strong>)</span>
-                    <button id="btnOpenDevCards" class="btn btn-outline btn-xs">Chi tiết</button>
-                  </div>
-                  <div id="handDevCardsList" class="hand-dev-cards-list">
-                    <!-- Render dev cards có thể kéo thả -->
-                  </div>
-                </div>
-              </div>
-
-              <!-- DẠNG 2: CHẾ ĐỘ THẺ BÀI (TỪNG THẺ RIÊNG LẺ KÉO THẢ ĐƯỢC) -->
-              <div id="cardsHandView" class="cards-hand-view hidden">
-                <div id="individualCardsList" class="individual-cards-list">
-                  <!-- Render từng lá bài kéo thả được -->
-                </div>
+            <!-- DẠNG 2: CHẾ ĐỘ THẺ BÀI (MẶC ĐỊNH - TỪNG THẺ RIÊNG LẺ TRÊN BÀN) -->
+            <div id="cardsHandView" class="cards-hand-view">
+              <div id="individualCardsList" class="individual-cards-list">
+                <!-- Render từng lá bài kéo thả được -->
               </div>
             </div>
           </div>
 
           <!-- 2. KHUNG GIỮA: BẢN ĐỒ THU PHÓNG & THANH KÉO QUÂN CỜ (CENTER STAGE) -->
           <main id="inGameCenterStage" class="in-game-center-stage">
-            <!-- Nút điều khiển Thu phóng & Âm lượng nổi trên mặt bàn cờ -->
-            <div class="board-zoom-toolbar" title="Điều khiển góc nhìn & âm thanh">
+            <!-- Nút điều khiển Thu phóng & Cài đặt nổi trên mặt bàn cờ -->
+            <div class="board-zoom-toolbar" title="Điều khiển góc nhìn & Cài đặt">
               <button id="btnZoomIn" class="btn-board-zoom" title="Phóng to bản đồ">+</button>
               <button id="btnZoomOut" class="btn-board-zoom" title="Thu nhỏ bản đồ">-</button>
               <button id="btnZoomReset" class="btn-board-zoom" title="Đặt lại góc nhìn mặc định">🔄</button>
-
-              <!-- Nút & Khung Điều Chỉnh Âm Lượng Nổi Trên Bàn Cờ -->
-              <div class="volume-control-wrapper board-vol-wrapper" id="boardVolumeWrapper">
-                <button id="btnToggleSoundBoard" class="btn-board-zoom" title="Âm thanh (Nhấp để bật/tắt, rê chuột để chỉnh âm lượng)">🔊</button>
-                <div class="volume-popover board-vol-popover" id="boardVolumePopover">
-                  <div class="volume-popover-inner">
-                    <div class="volume-header-row">
-                      <span class="volume-title">Âm lượng</span>
-                      <span id="volumePercentBoard" class="volume-val-badge">50%</span>
-                    </div>
-                    <div class="volume-slider-row">
-                      <button type="button" class="btn-vol-mute-icon" id="btnQuickMuteBoard" title="Tắt / Bật tiếng">🔊</button>
-                      <input type="range" id="volumeSliderBoard" min="0" max="100" value="50" class="volume-range-slider" aria-label="Âm lượng trò chơi">
-                    </div>
-                    <div class="volume-preset-buttons">
-                      <button type="button" class="btn-vol-preset" data-vol="0">0%</button>
-                      <button type="button" class="btn-vol-preset" data-vol="30">30%</button>
-                      <button type="button" class="btn-vol-preset" data-vol="65">65%</button>
-                      <button type="button" class="btn-vol-preset" data-vol="100">100%</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <button id="btnOpenSettingsBoard" class="btn-board-zoom btn-settings-trigger" title="Cài đặt trò chơi (Âm thanh, Chế độ thẻ, Thoát game)">⚙️</button>
             </div>
 
             <!-- Khung chứa SVG bàn cờ có thể kéo thả & lăn chuột thu phóng -->
@@ -855,6 +787,117 @@
         <p class="victory-desc">Đã đạt đủ 10 Điểm Chiến Thắng và trở thành Chúa Tể Đảo Catan!</p>
         <div class="modal-footer">
           <button id="btnVictoryBackToLobby" class="btn btn-primary btn-lg">Trở về sảnh chờ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 6: Cài đặt trò chơi (Game Settings Modal) -->
+    <div id="modalSettings" class="modal-backdrop hidden">
+      <div class="modal-card settings-modal-card">
+        <div class="modal-header">
+          <div class="settings-header-title">
+            <span class="settings-icon">⚙️</span>
+            <h3>CÀI ĐẶT TRÒ CHƠI</h3>
+          </div>
+          <button id="btnCloseSettingsModal" class="btn-close-modal" title="Đóng cài đặt">&times;</button>
+        </div>
+
+        <div class="modal-body settings-modal-body">
+          <!-- 1. ÂM THANH & HIỆU ỨNG -->
+          <div class="settings-group">
+            <div class="settings-group-header">
+              <span class="group-icon">🔊</span>
+              <h4>ÂM THANH & HIỆU ỨNG</h4>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="setting-label">Âm lượng</span>
+                <span class="setting-desc">Điều chỉnh âm thanh xúc xắc và các hiệu ứng</span>
+              </div>
+              <div class="settings-volume-control">
+                <button type="button" id="btnSettingsMute" class="btn-vol-mute-icon" title="Bật / Tắt tiếng">🔊</button>
+                <input type="range" id="settingsVolumeSlider" min="0" max="100" value="50" class="volume-range-slider" aria-label="Âm lượng trò chơi">
+                <span id="settingsVolumePercent" class="volume-val-badge">50%</span>
+              </div>
+            </div>
+
+            <div class="settings-presets-row">
+              <span class="setting-sublabel">Chọn nhanh:</span>
+              <div class="volume-preset-buttons">
+                <button type="button" class="btn-vol-preset" data-vol="0">Tắt (0%)</button>
+                <button type="button" class="btn-vol-preset" data-vol="30">Nhẹ (30%)</button>
+                <button type="button" class="btn-vol-preset" data-vol="65">Vừa (65%)</button>
+                <button type="button" class="btn-vol-preset" data-vol="100">Lớn (100%)</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. CHẾ ĐỘ HIỂN THỊ TÚI THẺ -->
+          <div class="settings-group">
+            <div class="settings-group-header">
+              <span class="group-icon">🃏</span>
+              <h4>CHẾ ĐỘ HIỂN THỊ TÚI THẺ</h4>
+            </div>
+
+            <div class="settings-options-grid">
+              <label class="settings-radio-card" id="optHandCards">
+                <input type="radio" name="handViewModeRadio" value="cards" checked>
+                <div class="radio-card-content">
+                  <span class="radio-card-icon">🃏</span>
+                  <div class="radio-card-text">
+                    <strong>Từng thẻ bài riêng lẻ</strong>
+                    <p>Mỗi thẻ bài tài nguyên và thẻ phát triển nằm riêng lẻ trên bàn, kéo thả trực quan</p>
+                  </div>
+                </div>
+              </label>
+
+              <label class="settings-radio-card" id="optHandCompact">
+                <input type="radio" name="handViewModeRadio" value="compact">
+                <div class="radio-card-content">
+                  <span class="radio-card-icon">🔢</span>
+                  <div class="radio-card-text">
+                    <strong>Ô đếm số lượng</strong>
+                    <p>5 ô đếm số lượng tài nguyên gọn gàng và danh sách chip thẻ phát triển</p>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- 3. GÓC NHÌN & BÀN CỜ -->
+          <div class="settings-group">
+            <div class="settings-group-header">
+              <span class="group-icon">🗺️</span>
+              <h4>GÓC NHÌN & BÀN CỜ</h4>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="setting-label">Đặt lại góc nhìn bàn cờ</span>
+                <span class="setting-desc">Đưa bản đồ Catan về vị trí tâm và độ phóng to mặc định</span>
+              </div>
+              <button id="btnSettingsResetZoom" class="btn btn-secondary btn-sm">
+                🔄 Đặt lại góc nhìn
+              </button>
+            </div>
+          </div>
+
+          <!-- 4. THOÁT GAME / RỜI PHÒNG -->
+          <div class="settings-group danger-group">
+            <div class="settings-group-header">
+              <span class="group-icon">🚪</span>
+              <h4>VÁN ĐẤU & PHÒNG CHƠI</h4>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="setting-label">Thoát ván đấu hiện tại</span>
+                <span class="setting-desc">Rời phòng chơi và trở lại màn hình sảnh chờ chính</span>
+              </div>
+              <button id="btnSettingsLeaveGame" class="btn btn-danger btn-sm">
+                🚪 Thoát game / Rời phòng
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

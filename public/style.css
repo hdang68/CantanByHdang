@@ -1487,94 +1487,50 @@ body.in-game-mode .pregame-only {
 /* 2. KHUNG TÚI THẺ CỦA BẠN (VIEWER HAND SECTION)           */
 /* Nằm cạnh danh sách người chơi (có thể kéo thả & thu gọn)  */
 /* ======================================================== */
+/* ======================================================== */
+/* 2. KHUNG THẺ BÀI NGƯỜI CHƠI (TỪNG THẺ RIÊNG LẺ TRÊN BÀN) */
+/* Không nằm trong tab - Các lá bài trải trực tiếp trên bàn */
+/* ======================================================== */
 .viewer-hand-section {
   position: absolute;
   bottom: 16px;
-  left: 315px; /* Đặt cạnh danh sách 4 người chơi cố định (285px + 16px + 14px) */
-  width: 310px;
-  z-index: 35;
-  padding: 8px 10px;
+  left: 315px; /* Cạnh danh sách 4 người chơi cố định */
+  z-index: 45;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  padding: 0 !important;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  transition: all 0.25s ease;
+  pointer-events: auto;
+  max-width: calc(100vw - 315px - 280px);
+  transition: filter 0.2s ease;
 }
 
-/* Chế độ Thẻ bài: Mở rộng ngang để chứa từng lá bài trực quan */
-.viewer-hand-section.hand-mode-cards {
-  width: min(560px, calc(100vw - 340px));
+.viewer-hand-section.drop-hover {
+  filter: drop-shadow(0 0 16px var(--color-primary));
 }
 
 @media (max-width: 1024px) {
   .viewer-hand-section {
     left: 16px;
-    bottom: 16px;
-  }
-  .viewer-hand-section.hand-mode-cards {
-    width: calc(100vw - 32px);
-    left: 16px;
+    bottom: 80px;
+    max-width: calc(100vw - 32px);
   }
 }
 
-/* Trạng thái THU GỌN túi thẻ */
-.viewer-hand-section.collapsed {
-  width: 270px;
-  padding: 6px 10px;
-}
-
-.viewer-hand-section.collapsed .hand-body-container {
-  display: none !important;
-}
-
-.viewer-hand-section.collapsed .hud-tab-header {
-  margin-bottom: 0;
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.hand-summary-badge {
-  font-size: 0.72rem;
-  font-weight: 800;
-  color: var(--text-gold);
-  background: rgba(241, 196, 15, 0.15);
-  border: 1px solid rgba(241, 196, 15, 0.4);
-  border-radius: 10px;
-  padding: 1px 7px;
-  margin-left: 6px;
-}
-
-.hand-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Nút Thu gọn / Mở rộng túi thẻ */
-.btn-toggle-hand {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-toggle-hand:hover {
-  background: rgba(230, 126, 34, 0.25);
-  border-color: var(--color-primary);
-  color: #ffd700;
-}
-
-.hand-body-container {
+.compact-hand-view {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  background: rgba(10, 15, 13, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 8px 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
 }
 
 .resource-cards-grid {
@@ -1633,81 +1589,73 @@ body.in-game-mode .pregame-only {
   transition: all 0.15s;
 }
 
-.btn-toggle-hand.btn-view-mode {
-  background: rgba(241, 196, 15, 0.12);
-  border-color: rgba(241, 196, 15, 0.35);
-  color: #f1c40f;
-}
-
-.btn-toggle-hand.btn-view-mode:hover {
-  background: rgba(241, 196, 15, 0.25);
-  border-color: #f1c40f;
-  color: #fff;
-}
-
-.compact-hand-view {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-}
-
 /* ======================================================== */
 /* CHẾ ĐỘ THẺ BÀI: TỪNG LÁ BÀI TÀI NGUYÊN & PHÁT TRIỂN      */
 /* ======================================================== */
 .cards-hand-view {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-end;
   width: 100%;
 }
 
 .individual-cards-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  align-items: stretch;
-  max-height: 220px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 4px 2px 8px 2px;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 18px 4px 6px 4px;
+  overflow-x: auto;
+  overflow-y: visible;
+  max-width: 100%;
+  scrollbar-width: thin;
 }
 
 .individual-cards-list::-webkit-scrollbar {
-  width: 5px;
+  height: 4px;
+}
+
+.individual-cards-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
 }
 
 .individual-cards-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
   border-radius: 4px;
+}
+
+.individual-cards-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
 }
 
 /* Thẻ bài đơn lẻ */
 .ind-card-item {
-  width: 66px;
-  height: 98px;
-  border-radius: 9px;
+  width: 70px;
+  height: 104px;
+  border-radius: 10px;
   position: relative;
   cursor: grab;
   user-select: none;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease, border-color 0.22s ease;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1.5px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.25);
   flex-shrink: 0;
 }
 
 .ind-card-item:hover {
-  transform: translateY(-8px) scale(1.05);
-  z-index: 10;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.7);
+  transform: translateY(-16px) scale(1.08);
+  z-index: 60;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.85);
 }
 
 .ind-card-item:active,
 .ind-card-item.is-dragging {
   cursor: grabbing;
-  opacity: 0.5;
+  opacity: 0.55;
   transform: scale(0.95);
 }
 
@@ -1862,25 +1810,22 @@ body.in-game-mode .pregame-only {
   border-color: #f1c40f;
 }
 
-/* Thông báo túi thẻ trống */
+/* Thông báo túi thẻ trống tinh tế */
 .ind-cards-empty {
-  width: 100%;
-  padding: 20px 12px;
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: var(--text-muted);
-  text-align: center;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1.5px dashed rgba(255, 255, 255, 0.1);
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(10, 15, 13, 0.65);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
   border-radius: 10px;
+  color: var(--text-muted);
+  backdrop-filter: blur(4px);
 }
 
 .ind-cards-empty .empty-icon {
-  font-size: 1.8rem;
-  opacity: 0.6;
+  font-size: 1.3rem;
+  opacity: 0.7;
 }
 
 .ind-cards-empty .empty-text {
@@ -1890,8 +1835,212 @@ body.in-game-mode .pregame-only {
 }
 
 .ind-cards-empty .empty-sub {
+  display: none;
+}
+
+/* ======================================================== */
+/* HỘP THOẠI CÀI ĐẶT TRÒ CHƠI (SETTINGS MODAL)              */
+/* Dồn toàn bộ nút chọn chế độ, âm thanh, thoát game vào đây*/
+/* ======================================================== */
+.settings-modal-card {
+  max-width: 520px;
+  width: 92vw;
+  background: linear-gradient(160deg, #18231c 0%, #0d1612 100%);
+  border: 1.5px solid rgba(241, 196, 15, 0.35);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), 0 0 24px rgba(241, 196, 15, 0.1);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.settings-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-header-title .settings-icon {
+  font-size: 1.4rem;
+}
+
+.settings-header-title h3 {
+  font-size: 1.15rem;
+  letter-spacing: 0.8px;
+  color: var(--text-gold);
+  margin: 0;
+  font-family: 'Cinzel', serif;
+}
+
+.settings-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 75vh;
+  overflow-y: auto;
+  padding: 16px 20px 24px 20px;
+}
+
+.settings-group {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.settings-group:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.settings-group.danger-group {
+  border-color: rgba(231, 76, 60, 0.35);
+  background: rgba(231, 76, 60, 0.05);
+}
+
+.settings-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settings-group-header .group-icon {
+  font-size: 1.1rem;
+}
+
+.settings-group-header h4 {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: var(--text-gold);
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.settings-group.danger-group .settings-group-header h4 {
+  color: #e74c3c;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.setting-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ecf0f1;
+}
+
+.setting-desc {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.setting-sublabel {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.settings-volume-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-volume-control .volume-range-slider {
+  width: 120px;
+}
+
+.settings-presets-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.settings-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .settings-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-radio-card {
+  position: relative;
+  display: block;
+  cursor: pointer;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 10px 12px;
+  transition: all 0.2s ease;
+}
+
+.settings-radio-card input[type="radio"] {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.radio-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 20px;
+}
+
+.radio-card-icon {
+  font-size: 1.4rem;
+}
+
+.radio-card-text strong {
+  font-size: 0.82rem;
+  color: #fff;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.radio-card-text p {
   font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-muted);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.settings-radio-card:hover {
+  border-color: rgba(241, 196, 15, 0.5);
+  background: rgba(241, 196, 15, 0.05);
+}
+
+.settings-radio-card:has(input[type="radio"]:checked) {
+  border-color: var(--color-primary);
+  background: rgba(230, 126, 34, 0.12);
+  box-shadow: 0 0 12px rgba(230, 126, 34, 0.25);
 }
 
 /* ======================================================== */
