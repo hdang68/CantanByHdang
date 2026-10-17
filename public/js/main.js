@@ -97,7 +97,6 @@ const waitingNote = document.getElementById('waitingNote');
 const lobbyBoardBadge = document.getElementById('lobbyBoardBadge');
 const lobbyHostMapActions = document.getElementById('lobbyHostMapActions');
 const toggleRandomBoard = document.getElementById('toggleRandomBoard');
-const btnRerollRandomBoard = document.getElementById('btnRerollRandomBoard');
 
 // 1. CỘT TRÁI (LEFT PANEL): 4 Người chơi & Túi thẻ
 const inGameLeftPanel = document.getElementById('inGameLeftPanel');
@@ -2933,9 +2932,6 @@ function renderPlayerSlots(room) {
     toggleRandomBoard.checked = isRandom;
     toggleRandomBoard.disabled = !isHost;
   }
-  if (btnRerollRandomBoard) {
-    btnRerollRandomBoard.style.display = (isHost && isRandom) ? 'inline-flex' : 'none';
-  }
   if (lobbyHostMapActions) {
     lobbyHostMapActions.style.display = isHost ? 'flex' : 'none';
   }
@@ -3106,9 +3102,6 @@ function showJoinView() {
   }
   if (toggleRandomBoard) {
     toggleRandomBoard.checked = false;
-  }
-  if (btnRerollRandomBoard) {
-    btnRerollRandomBoard.style.display = 'none';
   }
 
   // Xóa mã phòng trên URL nếu có
@@ -3579,28 +3572,6 @@ async function init() {
       toggleRandomBoard.checked = !isChecked;
     } finally {
       toggleRandomBoard.disabled = !state.isHost;
-    }
-  });
-
-  // Sinh lại bản đồ ngẫu nhiên khác khi đang ở chế độ Random (Chỉ chủ phòng)
-  btnRerollRandomBoard?.addEventListener('click', async () => {
-    if (!state.isHost) return;
-    btnRerollRandomBoard.disabled = true;
-    sound.playBop();
-    try {
-      const res = await emitAsync('room:randomize_board');
-      if (!res.success) {
-        sound.playFail();
-        alert(res.error);
-      } else {
-        sound.playSuccess();
-        addLog('Chủ phòng đã sinh lại Bản đồ ngẫu nhiên mới!', 'event');
-      }
-    } catch (err) {
-      sound.playFail();
-      alert(err.message);
-    } finally {
-      btnRerollRandomBoard.disabled = false;
     }
   });
 
