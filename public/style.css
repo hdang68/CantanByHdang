@@ -1494,7 +1494,7 @@ body.in-game-mode .pregame-only {
 .viewer-hand-section {
   position: absolute;
   bottom: 16px;
-  left: 315px; /* Cạnh danh sách 4 người chơi cố định */
+  left: 16px; /* Căn trái cả 2 chế độ (ô thẻ và tự do) theo yêu cầu */
   z-index: 45;
   background: transparent !important;
   border: none !important;
@@ -1504,8 +1504,9 @@ body.in-game-mode .pregame-only {
   margin: 0;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   pointer-events: auto;
-  max-width: calc(100vw - 315px - 280px);
+  max-width: calc(100vw - 32px);
   transition: filter 0.2s ease;
   overflow: visible !important;
 }
@@ -1526,12 +1527,51 @@ body.in-game-mode .pregame-only {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: rgba(10, 15, 13, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 15, 13, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 12px;
-  padding: 8px 10px;
+  padding: 6px 10px 10px 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
+  user-select: none;
+}
+
+.compact-hand-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+  padding: 2px 2px 6px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 2px;
+}
+
+.compact-hand-header:active {
+  cursor: grabbing;
+}
+
+.compact-drag-handle {
+  font-size: 1rem;
+  color: var(--text-gold, #f1c40f);
+  cursor: grab;
+  user-select: none;
+  opacity: 0.85;
+  line-height: 1;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.compact-drag-handle:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.compact-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--text-gold, #f1c40f);
+  text-transform: uppercase;
+  flex: 1;
 }
 
 .resource-cards-grid {
@@ -1605,9 +1645,10 @@ body.in-game-mode .pregame-only {
 .cards-hand-toolbar {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
   margin-bottom: 6px;
-  padding-left: 2px;
+  padding-left: 0;
   z-index: 50;
 }
 
@@ -1650,8 +1691,9 @@ body.in-game-mode .pregame-only {
   display: flex;
   flex-direction: row;
   align-items: flex-end;
+  justify-content: flex-start;
   gap: 8px;
-  padding: 6px 4px 6px 4px;
+  padding: 6px 0 6px 0;
   overflow: visible;
   max-width: 100%;
   position: relative;

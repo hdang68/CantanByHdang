@@ -47,6 +47,7 @@ const state = {
   draggedData: null,
   cardZoomIndex: 1, // 0: small, 1: medium, 2: large
   handViewMode: localStorage.getItem('catan_hand_view_mode') || 'cards', // 'cards' | 'compact'
+  compactHandPos: null, // { left, top } lưu vị trí kéo thả của tab ô thẻ bài
   cardCustomPositions: new Map() // key -> { dx, dy } vị trí kéo thả tự do của từng lá bài
 };
 
@@ -1521,6 +1522,32 @@ function applyHandViewMode(mode = state.handViewMode) {
   if (compactHandView) compactHandView.classList.toggle('hidden', isCards);
   if (cardsHandView) cardsHandView.classList.toggle('hidden', !isCards);
 
+  // Căn lề trái & quản lý vị trí kéo thả cho cả 2 chế độ
+  if (viewerHandSection) {
+    if (isCards) {
+      // Chế độ tự do luôn căn trái góc dưới màn hình (left: 16px, bottom: 16px)
+      viewerHandSection.style.transform = 'none';
+      viewerHandSection.style.left = '16px';
+      viewerHandSection.style.bottom = '16px';
+      viewerHandSection.style.top = 'auto';
+      viewerHandSection.style.right = 'auto';
+    } else if (state.compactHandPos) {
+      // Khôi phục vị trí người chơi đã kéo thả ở chế độ ô thẻ
+      viewerHandSection.style.transform = 'none';
+      viewerHandSection.style.left = state.compactHandPos.left;
+      viewerHandSection.style.top = state.compactHandPos.top;
+      viewerHandSection.style.bottom = 'auto';
+      viewerHandSection.style.right = 'auto';
+    } else {
+      // Mặc định chế độ ô thẻ cũng căn trái góc dưới màn hình (left: 16px, bottom: 16px)
+      viewerHandSection.style.transform = 'none';
+      viewerHandSection.style.left = '16px';
+      viewerHandSection.style.bottom = '16px';
+      viewerHandSection.style.top = 'auto';
+      viewerHandSection.style.right = 'auto';
+    }
+  }
+
   // Đồng bộ radio button trong mục Cài Đặt
   const radio = document.querySelector(`input[name="handViewModeRadio"][value="${mode}"]`);
   if (radio) radio.checked = true;
@@ -2047,7 +2074,7 @@ function openPortTradeModal(port, preselectedRes = null) {
 // ========================================================
 // HỆ THỐNG KÉO THẢ DI CHUYỂN TỰ DO CÁC TAB (DRAGGABLE TABS)
 // ========================================================
-let highestTabZIndex = 35;
+let highestTabZIndex = 50;
 
 function bringTabToFront(el) {
   if (!el) return;
@@ -2065,12 +2092,14 @@ function makeTabDraggable(element, handleElement = null) {
   let initialLeft = 0, initialTop = 0;
 
   element.addEventListener('pointerdown', () => {
-    bringTabToFront(element);
+    if (element !== viewerHandSection || state.handViewMode === 'compact') {
+      bringTabToFront(element);
+    }
   });
 
   handle.addEventListener('pointerdown', (e) => {
-    // Không drag nếu click vào button, input, hoặc quân cờ bên trong
-    if (e.target.closest('button, input, select, .btn, .btn-zoom-card, .dock-token-item, .res-card-item')) {
+    // Không drag nếu click vào button, input, quân cờ, thẻ bài hoặc chip dev card bên trong
+    if (e.target.closest('button, input, select, .btn, .btn-zoom-card, .dock-token-item, .res-card-item, .ind-card-item, .btn-sort-cards, .draggable-dev-chip')) {
       return;
     }
 
@@ -2114,12 +2143,19 @@ function makeTabDraggable(element, handleElement = null) {
 
     element.style.left = `${newLeft}px`;
     element.style.top = `${newTop}px`;
+
+    if (element === viewerHandSection) {
+      state.compactHandPos = { left: `${newLeft}px`, top: `${newTop}px` };
+    }
   });
 
   const stopDrag = (e) => {
     if (isDragging) {
       isDragging = false;
       element.classList.remove('is-dragging-tab');
+      if (element === viewerHandSection) {
+        state.compactHandPos = { left: element.style.left, top: element.style.top };
+      }
       try {
         if (e.pointerId) handle.releasePointerCapture(e.pointerId);
       } catch (_) {}
@@ -2131,8 +2167,10 @@ function makeTabDraggable(element, handleElement = null) {
 }
 
 function setupDraggableTabs() {
-  // Chú ý: hudPlayersWidget và viewerHandSection là tab CỐ ĐỊNH, không được kéo thả di chuyển
+  // hudPlayersWidget là tab CỐ ĐỊNH bên trái
+  // viewerHandSection ở chế độ ô thẻ (compact) có thể kéo thả di chuyển tự do qua compactHandView
   const tabs = [
+    { el: document.getElementById('viewerHandSection'), handle: document.getElementById('compactHandView') },
     { el: document.getElementById('hudDiceWidget'), handle: null },
     { el: document.getElementById('hudBankWidget'), handle: null },
     { el: document.getElementById('buildingDock'), handle: document.querySelector('.dock-drag-handle') },
@@ -2197,6 +2235,13 @@ function setupDragAndDrop() {
     card.addEventListener('dragend', () => {
       state.draggedData = null;
     });
+
+    // Bấm đúp để mở nhanh giao dịch ngân hàng 4:1
+    card.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      const res = card.getAttribute('data-res');
+      if (res) openBankTradeModal(res);
+    });
   });
 
   // 3. Vùng thả: Bản đồ SVG (Nhận quân cờ, thẻ bài hoặc kéo tài nguyên vào Cảng)
@@ -2211,7 +2256,7 @@ function setupDragAndDrop() {
     }
     if (!state.draggedData) return;
 
-    const { type, cardType } = state.draggedData;
+    const { type, cardType, resource } = state.draggedData;
     state.draggedData = null;
 
     // A. Thả quân cờ: Tìm đỉnh hoặc cạnh dưới con trỏ
@@ -2276,7 +2321,7 @@ function setupDragAndDrop() {
         const port = state.gameState?.board?.ports?.find(p => p.id === portId) ||
                      state.board?.ports?.find(p => p.id === portId) ||
                      { id: portId, type: portType, vertexIds: [] };
-        handlePortResourceDrop(port, state.draggedData.resource);
+        handlePortResourceDrop(port, resource);
         return;
       }
     }
