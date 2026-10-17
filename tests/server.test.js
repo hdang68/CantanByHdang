@@ -135,6 +135,44 @@ test('Server & Socket.IO Multiplayer Infrastructure', async (t) => {
     assert.equal(leaveRes.success, true);
   });
 
+  await t.test('Lobby: Player can change color and cannot pick taken color', async () => {
+    // Re-join client2 as Bob
+    const joinRes = await new Promise((resolve) => {
+      client2.emit('room:join', { roomId: createdRoomId, playerName: 'Bob' }, resolve);
+    });
+    assert.equal(joinRes.success, true);
+
+    // Alice is red (#e74c3c). Bob tries to pick red -> fails
+    const failChange = await new Promise((resolve) => {
+      client2.emit('room:change_color', { colorHex: '#e74c3c' }, resolve);
+    });
+    assert.equal(failChange.success, false);
+    assert.ok(failChange.error);
+
+    // Bob picks green (#2ecc71) -> succeeds
+    const successChange = await new Promise((resolve) => {
+      client2.emit('room:change_color', { colorHex: '#2ecc71' }, resolve);
+    });
+    assert.equal(successChange.success, true);
+    assert.equal(successChange.player.color.hex, '#2ecc71');
+  });
+
+  await t.test('Lobby: When host leaves, remaining player is promoted to host', async () => {
+    // Alice (host, client1) leaves the room
+    const hostLeave = await new Promise((resolve) => {
+      client1.emit('room:leave', {}, resolve);
+    });
+    assert.equal(hostLeave.success, true);
+
+    // Bob (client2) is now host!
+    const pingBob = await new Promise((resolve) => {
+      client2.emit('room:toggle_board_mode', { isRandom: true }, resolve);
+    });
+    assert.equal(pingBob.success, true);
+    assert.equal(pingBob.room.players[0].name, 'Bob');
+    assert.equal(pingBob.room.players[0].isHost, true);
+  });
+
   // Teardown
   if (client1) client1.disconnect();
   if (client2) client2.disconnect();

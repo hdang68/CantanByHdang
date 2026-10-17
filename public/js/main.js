@@ -2862,7 +2862,42 @@ async function handleRollDiceAction() {
 function renderPlayerSlots(room) {
   if (!room || !room.players) return;
 
-  // Phát âm thanh khi có người chơi khác trong phòng đổi màu
+  const isHost = room.hostId === state.playerId;
+  state.isHost = isHost;
+
+  // 1. Thông báo khi có người chơi mới tham gia, rời phòng hoặc chuyển đổi chủ phòng
+  if (state.prevRoomPlayers && state.prevRoomPlayers[room.id]) {
+    const prevPlayers = state.prevRoomPlayers[room.id];
+    const prevIds = prevPlayers.map(p => p.id);
+    const curIds = (room.players || []).map(p => p.id);
+
+    // Người chơi mới vào phòng
+    (room.players || []).forEach(p => {
+      if (p.id !== state.playerId && !prevIds.includes(p.id)) {
+        sound.playSuccess();
+        addLog(`${p.name} đã tham gia phòng! (${room.players.length}/4)`, 'info');
+      }
+    });
+
+    // Người chơi rời phòng
+    prevPlayers.forEach(p => {
+      if (p.id !== state.playerId && !curIds.includes(p.id)) {
+        sound.playBop();
+        addLog(`${p.name} đã rời phòng. (${room.players.length}/4)`, 'warning');
+      }
+    });
+
+    // Thông báo nếu bạn được chuyển quyền làm chủ phòng mới
+    const wasHost = prevPlayers.find(p => p.id === state.playerId)?.isHost;
+    if (isHost && !wasHost) {
+      sound.playSuccess();
+      addLog('Chủ phòng trước đã rời phòng. Bạn hiện là Chủ phòng mới!', 'success');
+    }
+  }
+  if (!state.prevRoomPlayers) state.prevRoomPlayers = {};
+  state.prevRoomPlayers[room.id] = (room.players || []).map(p => ({ id: p.id, name: p.name, isHost: p.isHost }));
+
+  // 2. Phát âm thanh khi có người chơi khác trong phòng đổi màu
   if (state.prevLobbyColors && state.prevLobbyColors[room.id]) {
     const prevMap = state.prevLobbyColors[room.id];
     (room.players || []).forEach(p => {
@@ -2884,14 +2919,15 @@ function renderPlayerSlots(room) {
   playerCount.textContent = room.players.length;
   playerList.innerHTML = '';
 
-  const isHost = room.hostId === state.playerId;
-  state.isHost = isHost;
-
-  // Cập nhật trạng thái bản đồ và quyền điều khiển map của chủ phòng trong sảnh chờ
+  // 3. Cập nhật trạng thái bản đồ và quyền điều khiển map của chủ phòng trong sảnh chờ
   const isRandom = (room.boardMode === 'RANDOM');
   if (lobbyBoardBadge) {
     lobbyBoardBadge.textContent = isRandom ? '🎲 Bản đồ Ngẫu nhiên' : '🗺️ Bản đồ Tiêu chuẩn';
     lobbyBoardBadge.classList.toggle('random-mode', isRandom);
+  }
+  if (boardModeBadge) {
+    boardModeBadge.textContent = isRandom ? '🎲 Bản đồ Ngẫu nhiên' : '🗺️ Bản đồ Tiêu chuẩn';
+    boardModeBadge.classList.toggle('random-mode', isRandom);
   }
   if (toggleRandomBoard) {
     toggleRandomBoard.checked = isRandom;
@@ -2918,7 +2954,7 @@ function renderPlayerSlots(room) {
     const slot = document.createElement('div');
 
     if (player) {
-      const isMe = player.id === state.playerId;
+      const isMe = (player.id === state.playerId || (state.socketId && player.socketId === state.socketId));
       slot.className = `player-slot ${isMe ? 'me' : ''}`;
 
       let colorPickerHtml = '';
@@ -2971,7 +3007,6 @@ function renderPlayerSlots(room) {
             e.stopPropagation();
             const colorHex = btn.getAttribute('data-color-hex');
             try {
-              sound.playBop();
               const res = await emitAsync('room:change_color', { colorHex });
               if (!res.success) {
                 sound.playFail();
@@ -3010,7 +3045,11 @@ function renderPlayerSlots(room) {
   if (isHost) {
     if (room.players.length >= 2) {
       btnStartGame.disabled = false;
-      waitingNote.textContent = 'Đã đủ số người chơi tối thiểu để bắt đầu ván!';
+      if (room.players.length === 4) {
+        waitingNote.textContent = 'Phòng đã đủ 4 người chơi! Bạn có thể bắt đầu ván ngay.';
+      } else {
+        waitingNote.textContent = 'Đã đủ số người chơi tối thiểu để bắt đầu ván!';
+      }
       waitingNote.style.color = '#2ecc71';
     } else {
       btnStartGame.disabled = true;
@@ -3043,6 +3082,8 @@ function showJoinView() {
   state.playerId = null;
   state.sessionToken = null;
   state.isHost = false;
+  state.prevRoomPlayers = {};
+  state.prevLobbyColors = {};
   clearSession();
 
   document.body.classList.remove('in-game-mode');
@@ -3050,15 +3091,29 @@ function showJoinView() {
   roomCard.classList.add('hidden');
   joinCard.classList.remove('hidden');
 
+  if (displayRoomId) displayRoomId.textContent = '-----';
+  if (playerCount) playerCount.textContent = '0';
+  if (playerList) playerList.innerHTML = '';
+  if (btnStartGame) btnStartGame.disabled = true;
+
   if (lobbyBoardBadge) {
     lobbyBoardBadge.textContent = '🗺️ Bản đồ Tiêu chuẩn';
     lobbyBoardBadge.classList.remove('random-mode');
+  }
+  if (boardModeBadge) {
+    boardModeBadge.textContent = '🗺️ Bản đồ Tiêu chuẩn';
+    boardModeBadge.classList.remove('random-mode');
   }
   if (toggleRandomBoard) {
     toggleRandomBoard.checked = false;
   }
   if (btnRerollRandomBoard) {
     btnRerollRandomBoard.style.display = 'none';
+  }
+
+  // Xóa mã phòng trên URL nếu có
+  if (window.location.search) {
+    window.history.replaceState({}, document.title, window.location.pathname);
   }
 
   fetch('/api/board/standard')
@@ -3075,6 +3130,26 @@ function showJoinView() {
 // ========================================================
 
 async function init() {
+  // 0. Khôi phục tên người chơi và đọc mã phòng từ liên kết mời (URL query ?room=...)
+  const savedPlayerName = localStorage.getItem('catan_player_name');
+  if (savedPlayerName && playerNameInput) {
+    playerNameInput.value = savedPlayerName;
+    state.playerName = savedPlayerName;
+  }
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomParam = urlParams.get('room') || urlParams.get('roomId');
+  if (roomParam && roomCodeInput) {
+    roomCodeInput.value = roomParam.trim().toUpperCase();
+    if (playerNameInput) {
+      if (!savedPlayerName) {
+        playerNameInput.focus();
+      } else {
+        btnJoinRoom?.focus();
+      }
+    }
+  }
+
   // 1. Tải bản đồ tiêu chuẩn ban đầu
   try {
     const res = await fetch('/api/board/standard');
@@ -3121,8 +3196,7 @@ async function init() {
 
                   const isGameActive = Boolean(
                     res.room?.status === 'PLAYING' ||
-                    state.gameState ||
-                    (res.room?.status && res.room.status !== 'WAITING')
+                    Boolean(state.gameState && res.room?.status !== 'LOBBY')
                   );
 
                   if (isGameActive) {
@@ -3132,6 +3206,8 @@ async function init() {
                       updateGameHud(state.gameState);
                     }
                   } else {
+                    document.body.classList.remove('in-game-mode');
+                    lobbySection.classList.remove('hidden');
                     showRoomView(res.room);
                   }
                   addLog(`Đã khôi phục thành công phiên chơi phòng [${res.room.id}]!`, 'success');
@@ -3376,6 +3452,23 @@ async function init() {
   });
 
   // 7. Tạo & Vào phòng
+  playerNameInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const code = roomCodeInput?.value?.trim();
+      if (code) {
+        btnJoinRoom?.click();
+      } else {
+        btnCreateRoom?.click();
+      }
+    }
+  });
+
+  roomCodeInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      btnJoinRoom?.click();
+    }
+  });
+
   btnCreateRoom.addEventListener('click', async () => {
     sound.playBop();
     const name = playerNameInput.value.trim() || 'Người chơi';
@@ -3392,9 +3485,11 @@ async function init() {
         addLog(`Đã tạo phòng [${res.room.id}]`, 'success');
         showRoomView(res.room);
       } else {
+        sound.playFail();
         alert(res.error);
       }
     } catch (err) {
+      sound.playFail();
       alert(err.message || 'Không thể kết nối máy chủ Catan. Vui lòng kiểm tra kết nối mạng và thử lại!');
     } finally {
       btnCreateRoom.disabled = false;
@@ -3402,9 +3497,13 @@ async function init() {
   });
 
   btnJoinRoom.addEventListener('click', async () => {
+    sound.playBop();
     const name = playerNameInput.value.trim() || 'Người chơi';
     const code = roomCodeInput.value.trim().toUpperCase();
-    if (!code) return alert('Vui lòng nhập mã phòng!');
+    if (!code) {
+      sound.playFail();
+      return alert('Vui lòng nhập mã phòng!');
+    }
 
     state.playerName = name;
     localStorage.setItem('catan_player_name', name);
@@ -3419,9 +3518,11 @@ async function init() {
         addLog(`Đã tham gia phòng [${res.room.id}]`, 'success');
         showRoomView(res.room);
       } else {
+        sound.playFail();
         alert(res.error);
       }
     } catch (err) {
+      sound.playFail();
       alert(err.message);
     } finally {
       btnJoinRoom.disabled = false;
@@ -3438,11 +3539,13 @@ async function init() {
     } finally {
       btnLeaveRoom.disabled = false;
       showJoinView();
+      addLog('Bạn đã rời khỏi phòng chờ.', 'system');
     }
   });
 
   btnCopyInvite.addEventListener('click', async () => {
     if (!state.roomId) return;
+    sound.playBop();
     const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${state.roomId}`;
     try {
       await navigator.clipboard.writeText(inviteUrl);
@@ -3514,7 +3617,11 @@ async function init() {
       sound.playFail();
       alert(err.message);
     } finally {
-      btnStartGame.disabled = false;
+      if (state.room && state.room.players.length >= 2 && state.isHost) {
+        btnStartGame.disabled = false;
+      } else {
+        btnStartGame.disabled = true;
+      }
     }
   });
 
