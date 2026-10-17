@@ -2437,7 +2437,7 @@ function handleIncomingTradeProposal(tradeOffer) {
   }
 
   const sender = state.gameState?.players[tradeOffer.senderId];
-  tradeProposalAuthor.textContent = `${sender?.name || 'Đối thủ'} gửi tới bạn đề xuất giao dịch:`;
+  tradeProposalAuthor.textContent = `${sender?.name || 'Đối thủ'} gửi đề xuất giao dịch (Bấm "Đồng ý" để hoàn tất giao dịch ngay):`;
 
   tradeProposalGiveCards.innerHTML = '';
   Object.entries(tradeOffer.give).forEach(([res, count]) => {
@@ -2450,25 +2450,57 @@ function handleIncomingTradeProposal(tradeOffer) {
   });
 
   tradeProposalReceiveCards.innerHTML = '';
+  const myResources = state.gameState?.players[state.playerId]?.resources || {};
+  let hasEnough = true;
+
   Object.entries(tradeOffer.receive).forEach(([res, count]) => {
     if (count > 0) {
+      const myCount = myResources[res] || 0;
       const tag = document.createElement('span');
       tag.className = 'res-tag';
-      tag.textContent = `${count} ${RESOURCE_NAMES[res] || res}`;
+      if (myCount < count) {
+        hasEnough = false;
+        tag.classList.add('missing-res');
+        tag.textContent = `${count} ${RESOURCE_NAMES[res] || res} (Bạn có ${myCount})`;
+      } else {
+        tag.textContent = `${count} ${RESOURCE_NAMES[res] || res}`;
+      }
       tradeProposalReceiveCards.appendChild(tag);
     }
   });
 
+  if (btnAcceptTradeProposal) {
+    btnAcceptTradeProposal.disabled = !hasEnough;
+    if (!hasEnough) {
+      btnAcceptTradeProposal.title = 'Bạn không có đủ tài nguyên đối thủ yêu cầu';
+    } else {
+      btnAcceptTradeProposal.title = 'Đồng ý và hoàn tất giao dịch ngay lập tức';
+    }
+  }
+
   modalTradeProposal.classList.remove('hidden');
+  sound?.playBop?.();
 }
 
 function handleTradeUpdate(tradeUpdate) {
   state.currentTradeOffer = tradeUpdate;
   renderLeftPlayersPanel(state.gameState);
 
-  if (!tradeUpdate || tradeUpdate.status === 'COMPLETED' || tradeUpdate.status === 'CANCELLED') {
+  if (!tradeUpdate || tradeUpdate.status === 'COMPLETED' || tradeUpdate.status === 'CANCELLED' || tradeUpdate.status === 'REJECTED') {
     modalTradeProposal.classList.add('hidden');
+    modalPlayerTrade.classList.add('hidden');
     activeTradeStatusBox.classList.add('hidden');
+    state.currentTradeOffer = null;
+
+    if (tradeUpdate?.status === 'COMPLETED') {
+      sound?.playBuild?.('settlement');
+      const nameA = tradeUpdate.playerAName || 'Người chơi';
+      const nameB = tradeUpdate.playerBName || 'Đối thủ';
+      addLog(`🤝 Giao dịch thành công giữa ${nameA} và ${nameB}!`, 'success');
+    } else if (tradeUpdate?.status === 'REJECTED') {
+      const rejecter = tradeUpdate.playerBName || 'Đối thủ';
+      addLog(`❌ ${rejecter} đã từ chối đề xuất giao dịch.`, 'warning');
+    }
     return;
   }
 
@@ -2479,37 +2511,12 @@ function handleTradeUpdate(tradeUpdate) {
 }
 
 function renderTradeResponses(tradeOffer) {
-  tradeResponsesList.innerHTML = '';
-  if (!tradeOffer.acceptedPlayerIds || tradeOffer.acceptedPlayerIds.length === 0) {
-    tradeResponsesList.innerHTML = '<div class="trade-resp-item">Đang chờ phản hồi...</div>';
-    return;
-  }
-
-  tradeOffer.acceptedPlayerIds.forEach(pId => {
-    const p = state.gameState?.players[pId];
-    const row = document.createElement('div');
-    row.className = 'trade-resp-item';
-    row.innerHTML = `
-      <span>✓ <strong>${escapeHtml(p?.name || 'Người chơi')}</strong> đồng ý đổi!</span>
-      <button class="btn btn-success btn-sm btn-confirm-partner" data-pid="${pId}">Xác nhận đổi</button>
-    `;
-    row.querySelector('.btn-confirm-partner').addEventListener('click', async () => {
-      try {
-        const res = await emitAsync('game:trade_confirm', { partnerId: pId });
-        if (!res.success) alert(res.error);
-        else {
-          addLog(`Đã hoàn tất giao dịch với ${p?.name}!`, 'success');
-          modalPlayerTrade.classList.add('hidden');
-          activeTradeStatusBox.classList.add('hidden');
-          state.currentTradeOffer = null;
-          renderLeftPlayersPanel(state.gameState);
-        }
-      } catch (err) {
-        alert(err.message);
-      }
-    });
-    tradeResponsesList.appendChild(row);
-  });
+  if (!tradeResponsesList) return;
+  tradeResponsesList.innerHTML = `
+    <div class="trade-resp-item waiting-note-item">
+      <span>⏳ Đang đợi đối thủ phản hồi... Khi đối thủ bấm Đồng ý, giao dịch sẽ hoàn tất ngay lập tức!</span>
+    </div>
+  `;
 }
 
 // ========================================================
@@ -3647,13 +3654,30 @@ async function init() {
   });
 
   btnAcceptTradeProposal.addEventListener('click', async () => {
+    btnAcceptTradeProposal.disabled = true;
     modalTradeProposal.classList.add('hidden');
-    await emitAsync('game:trade_respond', { accept: true });
+    try {
+      const res = await emitAsync('game:trade_respond', { accept: true });
+      if (!res.success) {
+        alert(res.error || 'Không thể thực hiện giao dịch.');
+      }
+    } catch (err) {
+      alert(err.message || 'Lỗi khi đồng ý giao dịch.');
+    } finally {
+      btnAcceptTradeProposal.disabled = false;
+    }
   });
 
   btnRejectTradeProposal.addEventListener('click', async () => {
+    btnRejectTradeProposal.disabled = true;
     modalTradeProposal.classList.add('hidden');
-    await emitAsync('game:trade_respond', { accept: false });
+    try {
+      await emitAsync('game:trade_respond', { accept: false });
+    } catch (err) {
+      console.warn('Lỗi khi từ chối giao dịch:', err);
+    } finally {
+      btnRejectTradeProposal.disabled = false;
+    }
   });
 
   // 10. Modal Bỏ bài ra số 7

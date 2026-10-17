@@ -404,21 +404,79 @@ export function setupSocketHandlers(io) {
 
     socket.on('game:trade_respond', ({ accept }, callback) => {
       const room = getRoom(socket.data.roomId);
-      if (!room || !room.activeTrade) return;
+      if (!room || !room.activeTrade || !room.engine) return;
 
       const pId = socket.data.playerId;
+      const trade = room.activeTrade;
+
       if (accept) {
-        if (!room.activeTrade.acceptedPlayerIds.includes(pId)) {
-          room.activeTrade.acceptedPlayerIds.push(pId);
+        // NGƯỜI B ĐỒNG Ý -> THỰC HIỆN GIAO DỊCH NGAY LẬP TỨC (KHÔNG CẦN BƯỚC XÁC NHẬN LẦN 2)
+        const playerA = room.engine.players[trade.senderId];
+        const playerB = room.engine.players[pId];
+
+        if (!playerA || !playerB) {
+          if (typeof callback === 'function') callback({ success: false, error: 'Người chơi không hợp lệ.' });
+          return;
+        }
+
+        const result = executePlayerTrade(playerA, playerB, trade);
+        if (result.success) {
+          room.engine.lastPlayerTrade = {
+            id: `player_trade_${Date.now()}_${Math.random()}`,
+            playerAId: playerA.id,
+            playerBId: playerB.id,
+            give: { ...trade.give },
+            receive: { ...trade.receive }
+          };
+          room.activeTrade = null;
+          io.to(room.id).emit('trade:update', {
+            status: 'COMPLETED',
+            trade: { ...trade, status: 'COMPLETED' },
+            partnerId: pId,
+            playerAName: playerA.name,
+            playerBName: playerB.name
+          });
+          broadcastGameState(io, room);
+          if (typeof callback === 'function') callback({ success: true, completed: true });
+        } else {
+          if (typeof callback === 'function') callback(result);
         }
       } else {
-        if (!room.activeTrade.rejectedPlayerIds.includes(pId)) {
-          room.activeTrade.rejectedPlayerIds.push(pId);
+        // NGƯỜI B TỪ CHỐI
+        if (!trade.rejectedPlayerIds.includes(pId)) {
+          trade.rejectedPlayerIds.push(pId);
         }
-      }
 
-      io.to(room.id).emit('trade:update', room.activeTrade);
-      if (typeof callback === 'function') callback({ success: true });
+        const playerB = room.engine.players[pId];
+        // Nếu là giao dịch nhắm đích danh người chơi này (targetPlayerId)
+        if (trade.targetPlayerId === pId) {
+          trade.status = 'CANCELLED';
+          room.activeTrade = null;
+          io.to(room.id).emit('trade:update', {
+            status: 'REJECTED',
+            trade: { ...trade, status: 'CANCELLED' },
+            partnerId: pId,
+            playerBName: playerB?.name || 'Đối thủ'
+          });
+        } else {
+          // Giao dịch tới nhiều người: kiểm tra xem tất cả đối thủ đã từ chối hết chưa
+          const otherPlayerIds = Object.keys(room.engine.players).filter(id => id !== trade.senderId);
+          const allRejected = otherPlayerIds.every(id => trade.rejectedPlayerIds.includes(id));
+          if (allRejected) {
+            trade.status = 'CANCELLED';
+            room.activeTrade = null;
+            io.to(room.id).emit('trade:update', {
+              status: 'REJECTED',
+              trade: { ...trade, status: 'CANCELLED' },
+              partnerId: pId,
+              playerBName: playerB?.name || 'Đối thủ'
+            });
+          } else {
+            io.to(room.id).emit('trade:update', trade);
+          }
+        }
+        if (typeof callback === 'function') callback({ success: true, rejected: true });
+      }
     });
 
     socket.on('game:trade_confirm', ({ partnerId }, callback) => {
@@ -443,7 +501,12 @@ export function setupSocketHandlers(io) {
           receive: { ...room.activeTrade.receive }
         };
         room.activeTrade = null;
-        io.to(room.id).emit('trade:update', null);
+        io.to(room.id).emit('trade:update', {
+          status: 'COMPLETED',
+          partnerId,
+          playerAName: playerA.name,
+          playerBName: playerB.name
+        });
         broadcastGameState(io, room);
       }
       if (typeof callback === 'function') callback(result);
