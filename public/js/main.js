@@ -46,7 +46,8 @@ const state = {
   prevPlayersSnapshot: null,
   draggedData: null,
   cardZoomIndex: 1, // 0: small, 1: medium, 2: large
-  handViewMode: localStorage.getItem('catan_hand_view_mode') || 'cards' // 'cards' | 'compact'
+  handViewMode: localStorage.getItem('catan_hand_view_mode') || 'cards', // 'cards' | 'compact'
+  cardCustomPositions: new Map() // key -> { dx, dy } vị trí kéo thả tự do của từng lá bài
 };
 
 // Phục hồi phiên trước đó từ sessionStorage ngay khi nạp trang (tránh gián đoạn khi F5)
@@ -111,6 +112,7 @@ const handViewModeLabel = document.getElementById('handViewModeLabel');
 const compactHandView = document.getElementById('compactHandView');
 const cardsHandView = document.getElementById('cardsHandView');
 const individualCardsList = document.getElementById('individualCardsList');
+const btnSortCards = document.getElementById('btnSortCards');
 const handCardsSummaryBadge = document.getElementById('handCardsSummaryBadge');
 const handHeader = document.getElementById('handHeader');
 const handDevCardsList = document.getElementById('handDevCardsList');
@@ -1563,12 +1565,233 @@ function closeSettingsModal() {
   modalSettings?.classList.add('hidden');
 }
 
-// Render từng lá bài tài nguyên và thẻ phát triển riêng lẻ (Chế độ Thẻ bài kéo thả)
+// Thực hiện kích hoạt thẻ phát triển
+function executePlayDevCard(cardType) {
+  if (cardType === 'knight') {
+    emitAsync('game:play_knight').then(res => {
+      if (!res.success) alert(res.error);
+      else addLog('Bạn đã kích hoạt thẻ Hiệp sĩ! Hãy di chuyển Tên cướp.', 'event');
+    });
+  } else if (cardType === 'year_of_plenty') {
+    openDevCardsModal();
+    yearOfPlentySelector.classList.remove('hidden');
+  } else if (cardType === 'monopoly') {
+    openDevCardsModal();
+    monopolySelector.classList.remove('hidden');
+  } else if (cardType === 'road_building') {
+    emitAsync('game:play_road_building').then(res => {
+      if (!res.success) alert(res.error);
+      else addLog('Bạn đã kích hoạt Thẻ Xây 2 Đường!', 'event');
+    });
+  } else {
+    openDevCardsModal();
+  }
+}
+
+// Kéo thả thẻ bài tự do trên mặt bàn cờ (Pointer Events cao cấp)
+function makeCardFreelyDraggable(card, cardKey, cardData) {
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let currentDx = 0;
+  let currentDy = 0;
+
+  card.addEventListener('pointerdown', (e) => {
+    // Chỉ xử lý chuột trái hoặc chạm cảm ứng
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    startX = e.clientX;
+    startY = e.clientY;
+
+    const savedPos = state.cardCustomPositions.get(cardKey);
+    currentDx = savedPos ? savedPos.dx : 0;
+    currentDy = savedPos ? savedPos.dy : 0;
+    isDragging = false;
+
+    const onPointerMove = (moveEvt) => {
+      const deltaX = moveEvt.clientX - startX;
+      const deltaY = moveEvt.clientY - startY;
+
+      if (!isDragging) {
+        if (Math.hypot(deltaX, deltaY) > 5) {
+          isDragging = true;
+          card.classList.add('is-freely-dragging');
+          card.style.transition = 'none';
+          card.style.zIndex = '9999';
+          state.draggedData = cardData;
+        }
+      }
+
+      if (isDragging) {
+        const newDx = currentDx + deltaX;
+        const newDy = currentDy + deltaY;
+        const tilt = Math.max(-10, Math.min(10, deltaX * 0.08));
+        card.style.transform = `translate3d(${newDx}px, ${newDy}px, 0) scale(1.08) rotate(${tilt}deg)`;
+
+        // Highlight drop targets dưới con trỏ
+        const elementsUnder = document.elementsFromPoint(moveEvt.clientX, moveEvt.clientY) || [];
+
+        // 1. Highlight Ngân Hàng
+        const isOverBank = elementsUnder.some(el => el.closest && el.closest('#hudBankWidget, .hud-bank-widget'));
+        document.getElementById('hudBankWidget')?.classList.toggle('drop-hover', Boolean(isOverBank && cardData.type === 'resource'));
+
+        // 2. Highlight Đối thủ
+        document.querySelectorAll('.player-panel-card').forEach(pCard => {
+          const isOverPlayer = elementsUnder.some(el => el === pCard || pCard.contains(el));
+          const isMe = (pCard.getAttribute('data-player-id') === state.playerId);
+          pCard.classList.toggle('drop-hover', Boolean(isOverPlayer && !isMe && cardData.type === 'resource'));
+        });
+
+        // 3. Highlight Cảng
+        const portElem = elementsUnder.find(el => el.closest && el.closest('.port-item, .port-group, .port-click-area'));
+        if (portElem && cardData.type === 'resource') {
+          portElem.closest('.port-item')?.classList.add('drop-hover');
+        } else {
+          document.querySelectorAll('.port-item.drop-hover').forEach(p => p.classList.remove('drop-hover'));
+        }
+
+        // 4. Highlight Bàn cờ SVG nếu là Dev card
+        if (cardData.type === 'dev_card') {
+          const isOverBoard = elementsUnder.some(el => el.closest && el.closest('#svgBoardContainer, .svg-board-container'));
+          document.getElementById('svgBoardContainer')?.classList.toggle('drop-hover', Boolean(isOverBoard && cardData.canPlay));
+        }
+      }
+    };
+
+    const onPointerUp = (upEvt) => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+
+      // Dọn dẹp highlight drop targets
+      document.getElementById('hudBankWidget')?.classList.remove('drop-hover');
+      document.querySelectorAll('.player-panel-card.drop-hover').forEach(p => p.classList.remove('drop-hover'));
+      document.querySelectorAll('.port-item.drop-hover').forEach(p => p.classList.remove('drop-hover'));
+      document.getElementById('svgBoardContainer')?.classList.remove('drop-hover');
+
+      if (isDragging) {
+        card.classList.remove('is-freely-dragging');
+        state.draggedData = null;
+
+        const deltaX = upEvt.clientX - startX;
+        const deltaY = upEvt.clientY - startY;
+        const finalDx = currentDx + deltaX;
+        const finalDy = currentDy + deltaY;
+
+        const elementsUnder = document.elementsFromPoint(upEvt.clientX, upEvt.clientY) || [];
+
+        // 1. Thả vào Ngân hàng Catan
+        const isOverBank = elementsUnder.some(el => el.closest && el.closest('#hudBankWidget, .hud-bank-widget'));
+        if (isOverBank && cardData.type === 'resource') {
+          sound?.playBuild?.('settlement');
+          state.cardCustomPositions.delete(cardKey);
+          card.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+          card.style.transform = 'none';
+          card.style.zIndex = '';
+          openBankTradeModal(cardData.resource);
+          return;
+        }
+
+        // 2. Thả vào Đối thủ để mở giao dịch cá nhân
+        const opponentCard = elementsUnder.find(el => el.closest && el.closest('.player-panel-card:not([data-player-id="' + state.playerId + '"])'));
+        if (opponentCard && cardData.type === 'resource') {
+          const targetPlayerId = opponentCard.closest('.player-panel-card').getAttribute('data-player-id');
+          const targetPlayerName = opponentCard.closest('.player-panel-card').querySelector('.p-card-name')?.textContent?.trim() || 'đối thủ';
+          state.cardCustomPositions.delete(cardKey);
+          card.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+          card.style.transform = 'none';
+          card.style.zIndex = '';
+          openDirectPlayerTradeModal(targetPlayerId, targetPlayerName, cardData.resource);
+          return;
+        }
+
+        // 3. Thả vào Cảng trên bản đồ SVG
+        const portElem = elementsUnder.find(el => el.closest && el.closest('.port-item, .port-group, .port-click-area'));
+        if (portElem && cardData.type === 'resource') {
+          const portItem = portElem.closest('.port-item') || portElem;
+          const portId = portItem.getAttribute('data-port-id');
+          const portType = portItem.getAttribute('data-port-type') || 'generic';
+          const port = state.gameState?.board?.ports?.find(p => p.id === portId) ||
+                       state.board?.ports?.find(p => p.id === portId) ||
+                       { id: portId, type: portType, vertexIds: [] };
+          state.cardCustomPositions.delete(cardKey);
+          card.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+          card.style.transform = 'none';
+          card.style.zIndex = '';
+          handlePortResourceDrop(port, cardData.resource);
+          return;
+        }
+
+        // 4. Thả Thẻ phát triển ra giữa Bàn cờ SVG để kích hoạt
+        const isOverBoard = elementsUnder.some(el => el.closest && el.closest('#svgBoardContainer, .svg-board-container'));
+        if (isOverBoard && cardData.type === 'dev_card' && cardData.canPlay) {
+          state.cardCustomPositions.delete(cardKey);
+          card.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+          card.style.transform = 'none';
+          card.style.zIndex = '';
+          executePlayDevCard(cardData.cardType);
+          return;
+        }
+
+        // 5. Thả tự do trên bàn cờ / khay thẻ
+        if (Math.hypot(finalDx, finalDy) < 25) {
+          // Kéo về gần vị trí khay túi thẻ ban đầu -> tự động hút về khay
+          state.cardCustomPositions.delete(cardKey);
+          card.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+          card.style.transform = 'none';
+          card.style.zIndex = '';
+          sound?.playBop?.();
+        } else {
+          // Đặt cố định tại vị trí người chơi vừa thả tự do trên bàn
+          state.cardCustomPositions.set(cardKey, { dx: finalDx, dy: finalDy });
+          card.style.transition = 'transform 0.15s ease-out';
+          card.style.transform = `translate3d(${finalDx}px, ${finalDy}px, 0)`;
+          card.style.zIndex = '70';
+          sound?.playBop?.();
+        }
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  });
+}
+
+// Xếp gọn và sắp xếp lại các lá bài ngay ngắn theo thứ tự
+function sortAndAlignCards() {
+  sound?.playDice?.();
+  state.cardCustomPositions.clear();
+
+  const allCards = document.querySelectorAll('#individualCardsList .ind-card-item');
+  allCards.forEach(card => {
+    card.style.transition = 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s ease';
+    card.style.transform = 'none';
+    card.style.zIndex = '';
+  });
+
+  setTimeout(() => {
+    if (state.gameState && state.playerId) {
+      const myData = state.gameState.players?.[state.playerId];
+      const isMyTurn = (state.gameState.currentTurnPlayerId === state.playerId);
+      renderIndividualCards(myData, isMyTurn, state.gameState.phase);
+    } else {
+      allCards.forEach(card => {
+        card.style.transition = '';
+      });
+    }
+  }, 360);
+
+  addLog('Đã thu gọn và xếp lại các lá bài trong túi ngay ngắn theo thứ tự!', 'system');
+}
+
+// Render từng lá bài tài nguyên và thẻ phát triển riêng lẻ (Chế độ Thẻ bài kéo thả tự do)
 function renderIndividualCards(myData, isMyTurn, phase) {
   if (!individualCardsList) return;
   individualCardsList.innerHTML = '';
 
   if (!myData) {
+    if (btnSortCards) btnSortCards.style.display = 'none';
     individualCardsList.innerHTML = `
       <div class="ind-cards-empty">
         <div class="empty-icon">🎴</div>
@@ -1590,13 +1813,14 @@ function renderIndividualCards(myData, isMyTurn, phase) {
 
     for (let i = 0; i < count; i++) {
       totalCardsCount++;
+      const cardKey = `res_${res}_${i}`;
       const card = document.createElement('div');
       card.className = `ind-card-item ind-res-card res-${res}`;
       card.setAttribute('data-res', res);
       card.setAttribute('data-index', i);
-      card.draggable = true;
+      card.setAttribute('data-card-key', cardKey);
       card.style.cursor = 'grab';
-      card.title = `Kéo thả lá bài ${name} vào Ngân hàng để đổi, vào Đối thủ để Trade, hoặc vào Cảng biển! (Bấm đúp để mở đổi Ngân hàng)`;
+      card.title = `Kéo thả lá bài ${name} tự do trên bàn, hoặc thả vào Ngân hàng / Đối thủ / Cảng để giao dịch! (Bấm đúp để mở đổi Ngân hàng)`;
 
       card.innerHTML = `
         <div class="ind-card-glow"></div>
@@ -1612,16 +1836,15 @@ function renderIndividualCards(myData, isMyTurn, phase) {
         </div>
       `;
 
-      card.addEventListener('dragstart', (e) => {
-        card.classList.add('is-dragging');
-        state.draggedData = { type: 'resource', resource: res };
-        e.dataTransfer.setData('text/plain', JSON.stringify(state.draggedData));
-      });
+      // Khôi phục vị trí người chơi đã kéo thả trước đó (nếu có)
+      const savedPos = state.cardCustomPositions.get(cardKey);
+      if (savedPos) {
+        card.style.transform = `translate3d(${savedPos.dx}px, ${savedPos.dy}px, 0)`;
+        card.style.zIndex = '70';
+      }
 
-      card.addEventListener('dragend', () => {
-        card.classList.remove('is-dragging');
-        state.draggedData = null;
-      });
+      // Gán sự kiện kéo thả tự do cao cấp
+      makeCardFreelyDraggable(card, cardKey, { type: 'resource', resource: res });
 
       // Bấm đúp để mở nhanh giao dịch ngân hàng
       card.addEventListener('dblclick', (e) => {
@@ -1637,11 +1860,13 @@ function renderIndividualCards(myData, isMyTurn, phase) {
   const devCards = myData.devCards || [];
   const unplayedCards = devCards.filter(c => !c.isPlayed);
 
-  unplayedCards.forEach((c) => {
+  unplayedCards.forEach((c, idx) => {
     totalCardsCount++;
+    const cardKey = `dev_${c.type}_${c.id || idx}`;
     const card = document.createElement('div');
     card.className = `ind-card-item ind-dev-card dev-${c.type}`;
     card.setAttribute('data-card-type', c.type);
+    card.setAttribute('data-card-key', cardKey);
 
     const icon = DEV_CARD_ICONS[c.type] || '🃏';
     const title = DEV_CARD_SHORT_NAMES[c.type] || c.type;
@@ -1649,18 +1874,17 @@ function renderIndividualCards(myData, isMyTurn, phase) {
     const isTurnBought = (c.turnBought === state.gameState?.turnNumber);
     const canPlay = isMyTurn && !isTurnBought && (phase === 'TURN_MAIN' || (c.type === 'knight' && phase === 'TURN_ROLL'));
 
-    card.draggable = Boolean(canPlay && !isVP);
-    card.style.cursor = (canPlay && !isVP) ? 'grab' : (isVP ? 'default' : 'not-allowed');
+    card.style.cursor = 'grab';
 
     let tooltip = '';
     if (isVP) {
-      tooltip = `${title}: +1 Điểm Chiến Thắng (Ẩn, tính vào tổng điểm cuối cùng)`;
+      tooltip = `${title}: +1 Điểm Chiến Thắng (Ẩn, tính vào tổng điểm cuối cùng). Kéo thả tự do để sắp xếp!`;
     } else if (canPlay) {
-      tooltip = `Kéo thả lá bài ${title} ra giữa bàn cờ hoặc bấm đúp để đánh thẻ!`;
+      tooltip = `Kéo thả lá bài ${title} tự do, thả ra giữa bàn cờ hoặc bấm đúp để đánh thẻ!`;
     } else if (isTurnBought) {
-      tooltip = `${title}: Mua trong lượt này (chưa thể sử dụng)`;
+      tooltip = `${title}: Mua trong lượt này (chưa thể sử dụng). Có thể kéo thả sắp xếp tự do!`;
     } else {
-      tooltip = `${title}: Chưa tới lượt của bạn`;
+      tooltip = `${title}: Chưa tới lượt của bạn. Có thể kéo thả sắp xếp tự do!`;
     }
     card.title = tooltip;
 
@@ -1678,49 +1902,36 @@ function renderIndividualCards(myData, isMyTurn, phase) {
       </div>
     `;
 
-    if (canPlay && !isVP) {
-      card.addEventListener('dragstart', (e) => {
-        card.classList.add('is-dragging');
-        state.draggedData = { type: 'dev_card', cardType: c.type };
-        e.dataTransfer.setData('text/plain', JSON.stringify(state.draggedData));
-      });
-
-      card.addEventListener('dragend', () => {
-        card.classList.remove('is-dragging');
-        state.draggedData = null;
-      });
-
-      // Bấm đúp để đánh thẻ trực tiếp
-      card.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
-        if (c.type === 'knight') {
-          emitAsync('game:play_knight').then(res => {
-            if (!res.success) alert(res.error);
-            else addLog('Bạn đã kích hoạt thẻ Hiệp sĩ! Hãy di chuyển Tên cướp.', 'event');
-          });
-        } else if (c.type === 'year_of_plenty') {
-          openDevCardsModal();
-          yearOfPlentySelector.classList.remove('hidden');
-        } else if (c.type === 'monopoly') {
-          openDevCardsModal();
-          monopolySelector.classList.remove('hidden');
-        } else {
-          openDevCardsModal();
-        }
-      });
-    } else {
-      // Nhấp đúp thẻ không đánh được -> mở modal thẻ phát triển để xem chi tiết
-      card.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
-        openDevCardsModal();
-      });
+    // Khôi phục vị trí tự do nếu đã kéo thả
+    const savedPos = state.cardCustomPositions.get(cardKey);
+    if (savedPos) {
+      card.style.transform = `translate3d(${savedPos.dx}px, ${savedPos.dy}px, 0)`;
+      card.style.zIndex = '70';
     }
+
+    // Cho phép kéo thả tự do mọi thẻ bài
+    makeCardFreelyDraggable(card, cardKey, {
+      type: 'dev_card',
+      cardType: c.type,
+      canPlay: Boolean(canPlay && !isVP)
+    });
+
+    // Bấm đúp thẻ
+    card.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      if (canPlay && !isVP) {
+        executePlayDevCard(c.type);
+      } else {
+        openDevCardsModal();
+      }
+    });
 
     individualCardsList.appendChild(card);
   });
 
   // 3. Trạng thái túi thẻ trống
   if (totalCardsCount === 0) {
+    if (btnSortCards) btnSortCards.style.display = 'none';
     individualCardsList.innerHTML = `
       <div class="ind-cards-empty">
         <div class="empty-icon">🎴</div>
@@ -1728,6 +1939,8 @@ function renderIndividualCards(myData, isMyTurn, phase) {
         <div class="empty-sub">Tài nguyên & Thẻ phát triển bạn sở hữu sẽ xuất hiện tại đây dưới dạng thẻ bài</div>
       </div>
     `;
+  } else {
+    if (btnSortCards) btnSortCards.style.display = 'inline-flex';
   }
 }
 
@@ -3025,6 +3238,16 @@ async function init() {
     if (e.key === 'Escape' && modalSettings && !modalSettings.classList.contains('hidden')) {
       closeSettingsModal();
     }
+    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        sortAndAlignCards();
+      }
+    }
+  });
+
+  // Nút Xếp gọn các lá bài (Sort Cards)
+  btnSortCards?.addEventListener('click', () => {
+    sortAndAlignCards();
   });
 
   // Chuyển đổi chế độ túi thẻ qua Radio Card trong Cài Đặt

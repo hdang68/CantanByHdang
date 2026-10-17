@@ -1507,6 +1507,7 @@ body.in-game-mode .pregame-only {
   pointer-events: auto;
   max-width: calc(100vw - 315px - 280px);
   transition: filter 0.2s ease;
+  overflow: visible !important;
 }
 
 .viewer-hand-section.drop-hover {
@@ -1594,9 +1595,55 @@ body.in-game-mode .pregame-only {
 /* ======================================================== */
 .cards-hand-view {
   display: flex;
-  flex-direction: row;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
   width: 100%;
+  overflow: visible;
+  position: relative;
+}
+
+.cards-hand-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-left: 2px;
+  z-index: 50;
+}
+
+.btn-sort-cards {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(18, 25, 22, 0.88);
+  border: 1.5px solid rgba(241, 196, 15, 0.55);
+  border-radius: 18px;
+  color: #f1c40f;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn-sort-cards:hover {
+  background: rgba(241, 196, 15, 0.25);
+  border-color: #f1c40f;
+  color: #fff;
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 20px rgba(241, 196, 15, 0.35);
+}
+
+.btn-sort-cards:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.btn-sort-cards .sort-icon {
+  font-size: 0.85rem;
 }
 
 .individual-cards-list {
@@ -1604,11 +1651,10 @@ body.in-game-mode .pregame-only {
   flex-direction: row;
   align-items: flex-end;
   gap: 8px;
-  padding: 18px 4px 6px 4px;
-  overflow-x: auto;
-  overflow-y: visible;
+  padding: 6px 4px 6px 4px;
+  overflow: visible;
   max-width: 100%;
-  scrollbar-width: thin;
+  position: relative;
 }
 
 .individual-cards-list::-webkit-scrollbar {
@@ -1644,6 +1690,7 @@ body.in-game-mode .pregame-only {
   border: 1.5px solid rgba(255, 255, 255, 0.22);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.25);
   flex-shrink: 0;
+  touch-action: none;
 }
 
 .ind-card-item:hover {
@@ -1652,11 +1699,16 @@ body.in-game-mode .pregame-only {
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.85);
 }
 
-.ind-card-item:active,
-.ind-card-item.is-dragging {
+.ind-card-item:active {
   cursor: grabbing;
-  opacity: 0.55;
-  transform: scale(0.95);
+}
+
+.ind-card-item.is-freely-dragging {
+  cursor: grabbing !important;
+  opacity: 0.95;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.9), 0 0 20px rgba(241, 196, 15, 0.45) !important;
+  filter: brightness(1.1);
+  will-change: transform;
 }
 
 .ind-card-glow {
