@@ -3096,12 +3096,13 @@ async function init() {
     toggleLogCollapse();
   });
 
-  btnToggleBoardView?.addEventListener('click', () => {
+  document.getElementById('btnToggleBoardView')?.addEventListener('click', () => {
     document.getElementById('gameSection')?.scrollIntoView({ behavior: 'smooth' });
   });
 
   // 7. Tạo & Vào phòng
   btnCreateRoom.addEventListener('click', async () => {
+    sound.playBop();
     const name = playerNameInput.value.trim() || 'Người chơi';
     state.playerName = name;
     localStorage.setItem('catan_player_name', name);
@@ -3119,7 +3120,7 @@ async function init() {
         alert(res.error);
       }
     } catch (err) {
-      alert(err.message);
+      alert(err.message || 'Không thể kết nối máy chủ Catan. Vui lòng kiểm tra kết nối mạng và thử lại!');
     } finally {
       btnCreateRoom.disabled = false;
     }
@@ -3530,4 +3531,8 @@ async function init() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
