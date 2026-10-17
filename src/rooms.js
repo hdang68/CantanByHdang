@@ -66,6 +66,8 @@ export function createRoom(hostPlayerName, socketId, isRandomBoard = false) {
     boardMode: isRandomBoard ? 'RANDOM' : 'STANDARD',
     is56Extension: false,
     maxPlayers: 4,
+    gameMode: 'basic',
+    targetVictoryPoints: 10,
     engine: null
   };
 
@@ -136,11 +138,15 @@ export function startGameInRoom(roomId, requestingSocketId, options = {}) {
   // Khởi tạo Game Engine (Mặc định xáo trộn ngẫu nhiên thứ tự chơi khi vào game)
   const shouldRandomizeOrder = options.randomizeTurnOrder !== false;
   const is56 = Boolean(room.is56Extension || room.players.length > 4);
+  const gameMode = room.gameMode || 'basic';
+  const targetVictoryPoints = room.targetVictoryPoints || (gameMode === 'seafarers' ? 12 : 10);
   room.engine = new CatanEngine(room.players, {
     board: room.board,
     randomizeTurnOrder: shouldRandomizeOrder,
     is56,
-    maxPlayers: room.maxPlayers || (is56 ? 6 : 4)
+    maxPlayers: room.maxPlayers || (is56 ? 6 : 4),
+    gameMode,
+    targetVictoryPoints
   });
 
   // Đồng bộ danh sách người chơi trong phòng theo thứ tự lượt chơi ngẫu nhiên
@@ -285,6 +291,23 @@ export function changePlayerColor(roomId, requestingSocketId, newColorHex) {
   return { success: true, room, player };
 }
 
+export function setRoomGameMode(roomId, requestingSocketId, gameMode) {
+  const room = getRoom(roomId);
+  if (!room) return { success: false, error: 'Phòng không tồn tại.' };
+  if (room.status !== 'LOBBY') return { success: false, error: 'Chỉ có thể đổi chế độ chơi khi đang ở sảnh chờ.' };
+
+  const requestingPlayer = room.players.find(p => p.socketId === requestingSocketId);
+  if (!requestingPlayer || !requestingPlayer.isHost) {
+    return { success: false, error: 'Chỉ chủ phòng mới có quyền đổi chế độ chơi.' };
+  }
+
+  const validMode = (gameMode === 'seafarers') ? 'seafarers' : 'basic';
+  room.gameMode = validMode;
+  room.targetVictoryPoints = (validMode === 'seafarers') ? 12 : 10;
+
+  return { success: true, room, gameMode: room.gameMode, targetVictoryPoints: room.targetVictoryPoints };
+}
+
 export function getRoomPublicView(room) {
   if (!room) return null;
   return {
@@ -294,6 +317,8 @@ export function getRoomPublicView(room) {
     boardMode: room.boardMode || 'STANDARD',
     is56Extension: Boolean(room.is56Extension),
     maxPlayers: room.maxPlayers || (room.is56Extension ? 6 : 4),
+    gameMode: room.gameMode || 'basic',
+    targetVictoryPoints: room.targetVictoryPoints || (room.gameMode === 'seafarers' ? 12 : 10),
     players: room.players.map(p => ({
       id: p.id,
       name: p.name,

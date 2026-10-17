@@ -77,6 +77,8 @@ export class CatanEngine {
 
     const is56 = Boolean(options.is56 || playersList.length > 4 || (options.board && Object.keys(options.board.hexes || {}).length > 19));
     this.is56 = is56;
+    this.gameMode = options.gameMode || 'basic';
+    this.targetVictoryPoints = Number(options.targetVictoryPoints) || (this.gameMode === 'seafarers' ? 12 : 10);
     this.board = options.board || (is56
       ? (options.isRandomBoard ? create56RandomBoard() : create56StandardBoard())
       : (options.isRandomBoard ? createRandomBoard() : createStandardBoard()));
@@ -797,12 +799,13 @@ export class CatanEngine {
       const { publicPoints, totalPoints } = calculateVictoryPoints(player, this.board);
       player.totalVictoryPoints = totalPoints;
 
-      // Kiểm tra điều kiện thắng (10 điểm trên lượt của mình)
+      // Kiểm tra điều kiện thắng (10 điểm ở Cơ bản hoặc 12 điểm ở Seafarers trên lượt của mình)
+      const targetVp = this.targetVictoryPoints || (this.gameMode === 'seafarers' ? 12 : 10);
       const isCurrentPlayer = (player.id === this.turnOrder[this.currentTurnIndex]);
-      if (totalPoints >= 10 && isCurrentPlayer && this.phase !== GAME_PHASES.SETUP_ROUND_1 && this.phase !== GAME_PHASES.SETUP_ROUND_2) {
+      if (totalPoints >= targetVp && isCurrentPlayer && this.phase !== GAME_PHASES.SETUP_ROUND_1 && this.phase !== GAME_PHASES.SETUP_ROUND_2) {
         this.phase = GAME_PHASES.GAME_OVER;
         this.winnerId = player.id;
-        this.logEvent(`🎉 CHÚC MỪNG ${player.name} ĐÃ ĐẠT ${totalPoints} ĐIỂM VÀ GIÀNH CHIẾN THẮNG!`, 'victory');
+        this.logEvent(`🎉 CHÚC MỪNG ${player.name} ĐÃ ĐẠT ${totalPoints}/${targetVp} ĐIỂM VÀ GIÀNH CHIẾN THẮNG!`, 'victory');
       }
     });
   }
@@ -890,6 +893,8 @@ export class CatanEngine {
 
     return {
       phase: this.phase,
+      gameMode: this.gameMode,
+      targetVictoryPoints: this.targetVictoryPoints,
       turnNumber: this.turnNumber,
       currentTurnPlayerId: this.turnOrder[this.currentTurnIndex],
       turnOrder: this.turnOrder,

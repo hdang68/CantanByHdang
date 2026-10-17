@@ -94,7 +94,7 @@ export function canPlayDevCard(card, currentTurnNumber, devCardPlayedThisTurn) {
 
   // Thẻ Victory Point không cần chơi chủ động, được tính điểm tự động
   if (card.type === DEV_CARD_TYPES.VICTORY_POINT) {
-    return { canPlay: false, error: 'Thẻ Điểm chiến thắng không cần đánh ra, được tính tự động khi đủ 10 điểm.' };
+    return { canPlay: false, error: 'Thẻ Điểm chiến thắng không cần đánh ra, được cộng điểm tự động khi đạt mục tiêu chiến thắng.' };
   }
 
   // Mỗi lượt chỉ được chơi tối đa 1 thẻ phát triển

@@ -231,3 +231,53 @@ test('Development Cards: Purchase and Turn-Played Restrictions', () => {
     assert.match(playRes.error, /vừa mua trong cùng lượt/);
   }
 });
+
+test('Game Mode: Basic (10 VP) vs Seafarers (12 VP) win condition', () => {
+  const players = [
+    { id: 'p1', name: 'Alice' },
+    { id: 'p2', name: 'Bob' }
+  ];
+
+  // 1. Basic Engine: target 10 VP
+  const basicEngine = new CatanEngine(players, { gameMode: 'basic' });
+  assert.equal(basicEngine.targetVictoryPoints, 10);
+  assert.equal(basicEngine.gameMode, 'basic');
+
+  // Give Alice 10 VP via hidden dev cards
+  basicEngine.phase = GAME_PHASES.TURN_MAIN;
+  basicEngine.currentTurnIndex = 0; // Alice turn
+  basicEngine.players.p1.devCards = Array(10).fill(null).map((_, i) => ({ id: `vp_${i}`, type: 'victory_point' }));
+  basicEngine.updateScores();
+  assert.equal(basicEngine.phase, GAME_PHASES.GAME_OVER);
+  assert.equal(basicEngine.winnerId, 'p1');
+
+  // 2. Seafarers Engine: target 12 VP
+  const seafarersEngine = new CatanEngine(players, { gameMode: 'seafarers' });
+  assert.equal(seafarersEngine.targetVictoryPoints, 12);
+  assert.equal(seafarersEngine.gameMode, 'seafarers');
+
+  // Give Alice 10 VP -> In Seafarers, 10 VP must NOT trigger game over!
+  seafarersEngine.phase = GAME_PHASES.TURN_MAIN;
+  seafarersEngine.currentTurnIndex = 0; // Alice turn
+  seafarersEngine.players.p1.devCards = Array(10).fill(null).map((_, i) => ({ id: `vp_${i}`, type: 'victory_point' }));
+  seafarersEngine.updateScores();
+  assert.notEqual(seafarersEngine.phase, GAME_PHASES.GAME_OVER, '10 VP in Seafarers does not trigger win');
+  assert.equal(seafarersEngine.winnerId, null);
+
+  // Give Alice 11 VP -> Still not winning
+  seafarersEngine.players.p1.devCards.push({ id: 'vp_10', type: 'victory_point' });
+  seafarersEngine.updateScores();
+  assert.notEqual(seafarersEngine.phase, GAME_PHASES.GAME_OVER, '11 VP in Seafarers does not trigger win');
+  assert.equal(seafarersEngine.winnerId, null);
+
+  // Give Alice 12th VP -> Now Alice wins Seafarers!
+  seafarersEngine.players.p1.devCards.push({ id: 'vp_11', type: 'victory_point' });
+  seafarersEngine.updateScores();
+  assert.equal(seafarersEngine.phase, GAME_PHASES.GAME_OVER, '12 VP in Seafarers triggers win');
+  assert.equal(seafarersEngine.winnerId, 'p1');
+
+  // Player view checks
+  const pView = seafarersEngine.getPlayerView('p1');
+  assert.equal(pView.gameMode, 'seafarers');
+  assert.equal(pView.targetVictoryPoints, 12);
+});

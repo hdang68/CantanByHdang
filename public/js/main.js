@@ -99,6 +99,9 @@ const lobbyHostMapActions = document.getElementById('lobbyHostMapActions');
 const toggleRandomBoard = document.getElementById('toggleRandomBoard');
 const toggle56Players = document.getElementById('toggle56Players');
 const maxPlayerCount = document.getElementById('maxPlayerCount');
+const selectGameMode = document.getElementById('selectGameMode');
+const lobbyGameModeBadge = document.getElementById('lobbyGameModeBadge');
+const victoryDescText = document.getElementById('victoryDescText');
 
 // 1. CỘT TRÁI (LEFT PANEL): 4 Người chơi & Túi thẻ
 const inGameLeftPanel = document.getElementById('inGameLeftPanel');
@@ -979,8 +982,12 @@ function updateGameHud(gameState) {
     if (state.prevPhase !== 'GAME_OVER') {
       sound.playVictory();
     }
+    const targetVp = gameState.targetVictoryPoints || (gameState.gameMode === 'seafarers' ? 12 : 10);
     const winner = gameState.players[gameState.winnerId];
     victoryWinnerName.textContent = winner ? winner.name : 'Người chiến thắng';
+    if (victoryDescText) {
+      victoryDescText.textContent = `Đã đạt đủ ${targetVp} Điểm Chiến Thắng và trở thành Chúa Tể Đảo Catan!`;
+    }
     modalVictory.classList.remove('hidden');
   }
   state.prevPhase = gameState.phase;
@@ -1385,6 +1392,7 @@ function renderLeftPlayersPanel(gameState) {
       const devCount = isMe
         ? (p.devCards?.filter(c => !c.isPlayed).length || 0)
         : (p.totalDevCardCount || 0);
+      const targetVp = state.gameState?.targetVictoryPoints || (state.gameState?.gameMode === 'seafarers' ? 12 : 10);
       const vp = isMe ? (p.totalVictoryPoints || 0) : (p.publicVictoryPoints || 0);
 
       const colorHex = p.color?.hex || std.hex;
@@ -1410,7 +1418,7 @@ function renderLeftPlayersPanel(gameState) {
             ${isMe ? '<span class="you-tag">(Bạn)</span>' : ''}
           </div>
           <div class="p-card-stats">
-            <span class="stat-item" title="Điểm chiến thắng">🏆 <strong>${vp}</strong>/10</span>
+            <span class="stat-item" title="Điểm chiến thắng (Mục tiêu: ${targetVp} điểm)">🏆 <strong>${vp}</strong>/${targetVp}</span>
             <span class="stat-item" title="Thẻ tài nguyên">🎴 <strong>${cardCount}</strong></span>
             ${devCount > 0 ? `<span class="stat-item" title="Thẻ phát triển">🃏 <strong>${devCount}</strong></span>` : ''}
           </div>
@@ -2959,6 +2967,17 @@ function renderPlayerSlots(room) {
     toggle56Players.checked = is56;
     toggle56Players.disabled = !isHost;
   }
+  const isSeafarers = (room.gameMode === 'seafarers');
+  const targetVP = room.targetVictoryPoints || (isSeafarers ? 12 : 10);
+  if (selectGameMode) {
+    selectGameMode.value = room.gameMode || 'basic';
+    selectGameMode.disabled = !isHost;
+  }
+  if (lobbyGameModeBadge) {
+    lobbyGameModeBadge.textContent = isSeafarers ? `🌊 Seafarer (${targetVP} điểm)` : `⛵ Cơ bản (${targetVP} điểm)`;
+    lobbyGameModeBadge.classList.toggle('seafarers-mode', isSeafarers);
+    lobbyGameModeBadge.classList.toggle('basic-mode', !isSeafarers);
+  }
   if (lobbyHostMapActions) {
     lobbyHostMapActions.style.display = isHost ? 'flex' : 'none';
   }
@@ -3132,6 +3151,13 @@ function showJoinView() {
   }
   if (toggle56Players) {
     toggle56Players.checked = false;
+  }
+  if (selectGameMode) {
+    selectGameMode.value = 'basic';
+  }
+  if (lobbyGameModeBadge) {
+    lobbyGameModeBadge.textContent = '⛵ Cơ bản (10 điểm)';
+    lobbyGameModeBadge.className = 'lobby-mode-badge basic-mode';
   }
   if (maxPlayerCount) {
     maxPlayerCount.textContent = '4';
@@ -3633,6 +3659,34 @@ async function init() {
       toggle56Players.checked = !isChecked;
     } finally {
       toggle56Players.disabled = !state.isHost;
+    }
+  });
+
+  // Chọn chế độ chơi Basic (10 điểm) hoặc Seafarer (12 điểm) (Chỉ chủ phòng)
+  selectGameMode?.addEventListener('change', async () => {
+    if (!state.isHost) return;
+    const newMode = selectGameMode.value; // 'basic' | 'seafarers'
+    sound.playBop();
+    selectGameMode.disabled = true;
+    try {
+      const res = await emitAsync('room:set_game_mode', { gameMode: newMode });
+      if (!res.success) {
+        sound.playFail();
+        alert(res.error);
+        if (state.room) selectGameMode.value = state.room.gameMode || 'basic';
+      } else {
+        sound.playSuccess();
+        const modeText = (newMode === 'seafarers')
+          ? '🌊 Đã chọn chế độ Thủy thủ / Seafarer (Mục tiêu 12 điểm chiến thắng)'
+          : '⛵ Đã chọn chế độ Catan Cơ bản (Mục tiêu 10 điểm chiến thắng)';
+        addLog(modeText, 'event');
+      }
+    } catch (err) {
+      sound.playFail();
+      alert(err.message);
+      if (state.room) selectGameMode.value = state.room.gameMode || 'basic';
+    } finally {
+      selectGameMode.disabled = !state.isHost;
     }
   });
 

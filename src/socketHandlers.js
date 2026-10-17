@@ -9,6 +9,7 @@ import {
   randomizeRoomBoard,
   setStandardRoomBoard,
   toggleRoom56Extension,
+  setRoomGameMode,
   changePlayerColor
 } from './rooms.js';
 import { executePlayerTrade, createTradeOffer } from './game/trading.js';
@@ -274,6 +275,31 @@ export function setupSocketHandlers(io) {
       } catch (err) {
         console.error('[Room] Lỗi đổi chế độ 5-6 người chơi:', err);
         cb({ success: false, error: err.message || 'Không thể đổi chế độ mở rộng lúc này.' });
+      }
+    });
+
+    // 3C4. Chọn chế độ chơi: Basic (10 điểm) hoặc Seafarers (12 điểm) (Chỉ chủ phòng)
+    socket.on('room:set_game_mode', (data, callback) => {
+      const cb = getCallback(data, callback);
+      try {
+        const roomId = socket.data.roomId;
+        if (!roomId) {
+          return cb({ success: false, error: 'Bạn chưa vào phòng.' });
+        }
+        const gameMode = data?.gameMode || 'basic';
+        const result = setRoomGameMode(roomId, socket.id, gameMode);
+        if (!result.success) {
+          return cb(result);
+        }
+
+        const publicView = getRoomPublicView(result.room);
+        const modeLabel = result.gameMode === 'seafarers' ? 'Thủy thủ / Seafarers (12 điểm)' : 'Cơ bản (10 điểm)';
+        console.log(`[Room] Chủ phòng đã chọn chế độ chơi phòng ${roomId}: ${modeLabel}`);
+        io.to(roomId).emit('room:state', publicView);
+        cb({ success: true, room: publicView, gameMode: result.gameMode, targetVictoryPoints: result.targetVictoryPoints });
+      } catch (err) {
+        console.error('[Room] Lỗi đổi chế độ chơi:', err);
+        cb({ success: false, error: err.message || 'Không thể đổi chế độ chơi lúc này.' });
       }
     });
 

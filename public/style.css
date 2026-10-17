@@ -370,10 +370,82 @@ body {
   border-color: rgba(230, 126, 34, 0.5);
 }
 
+.lobby-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(46, 204, 113, 0.18);
+  color: #2ecc71;
+  border: 1px solid rgba(46, 204, 113, 0.4);
+}
+
+.lobby-mode-badge.seafarers-mode {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.5);
+}
+
 .lobby-map-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+/* Dropdown Lựa chọn Chế độ chơi (Basic / Seafarers) */
+.game-mode-dropdown-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 4px 12px;
+  transition: all 0.25s ease;
+}
+
+.game-mode-dropdown-wrapper:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.game-mode-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #ecf0f1;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.game-mode-select {
+  background: #1a252f;
+  color: #f1f5f9;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.game-mode-select option {
+  background: #1a252f;
+  color: #f1f5f9;
+}
+
+.game-mode-select:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
+}
+
+.game-mode-select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 /* Nút bật/tắt (Toggle Switch) cho Chế độ Random Map trong Sảnh chờ */

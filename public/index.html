@@ -91,13 +91,21 @@
             <button id="btnLeaveRoom" class="btn btn-danger btn-sm">Rời phòng</button>
           </div>
 
-          <!-- Khu vực tùy chỉnh bản đồ trong sảnh chờ (Chủ phòng được phép đổi map) -->
+          <!-- Khu vực tùy chỉnh bản đồ và chế độ chơi trong sảnh chờ -->
           <div id="lobbyMapPanel" class="lobby-map-panel">
             <div class="lobby-map-header">
-              <span class="lobby-map-label">Bản đồ trò chơi:</span>
+              <span class="lobby-map-label">Bản đồ & Chế độ:</span>
               <span id="lobbyBoardBadge" class="lobby-board-badge">Bản đồ Tiêu chuẩn</span>
+              <span id="lobbyGameModeBadge" class="lobby-mode-badge basic-mode">⛵ Cơ bản (10 điểm)</span>
             </div>
             <div id="lobbyHostMapActions" class="lobby-map-actions">
+              <div class="game-mode-dropdown-wrapper" title="Chủ phòng: Chọn chế độ Catan Cơ bản (10 điểm) hoặc Seafarer (12 điểm)">
+                <label for="selectGameMode" class="game-mode-label">Chế độ:</label>
+                <select id="selectGameMode" class="game-mode-select">
+                  <option value="basic">⛵ Cơ bản (10 điểm)</option>
+                  <option value="seafarers">🌊 Seafarer (12 điểm)</option>
+                </select>
+              </div>
               <label class="map-toggle-switch" title="Chủ phòng: Bật/Tắt chế độ bản đồ ngẫu nhiên">
                 <input type="checkbox" id="toggleRandomBoard">
                 <span class="map-toggle-slider"></span>
@@ -798,7 +806,7 @@
         <div class="victory-crown">👑</div>
         <h2 class="victory-title">CHIẾN THẮNG!</h2>
         <div id="victoryWinnerName" class="winner-name-display">--</div>
-        <p class="victory-desc">Đã đạt đủ 10 Điểm Chiến Thắng và trở thành Chúa Tể Đảo Catan!</p>
+        <p id="victoryDescText" class="victory-desc">Đã đạt đủ 10 Điểm Chiến Thắng và trở thành Chúa Tể Đảo Catan!</p>
         <div class="modal-footer">
           <button id="btnVictoryBackToLobby" class="btn btn-primary btn-lg">Trở về sảnh chờ</button>
         </div>

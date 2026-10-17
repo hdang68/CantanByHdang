@@ -219,6 +219,25 @@ test('Server & Socket.IO Multiplayer Infrastructure', async (t) => {
     client6.disconnect();
   });
 
+  await t.test('Lobby: Host selects Basic or Seafarers game mode (10 vs 12 VP)', async () => {
+    // client2 is host of createdRoomId
+    // Non-host (client1 is not even in room, but let's test invalid host or client2)
+    const setSeafarers = await new Promise(r => client2.emit('room:set_game_mode', { gameMode: 'seafarers' }, r));
+    assert.equal(setSeafarers.success, true);
+    assert.equal(setSeafarers.gameMode, 'seafarers');
+    assert.equal(setSeafarers.targetVictoryPoints, 12);
+    assert.equal(setSeafarers.room.gameMode, 'seafarers');
+    assert.equal(setSeafarers.room.targetVictoryPoints, 12);
+
+    // Switch back to basic
+    const setBasic = await new Promise(r => client2.emit('room:set_game_mode', { gameMode: 'basic' }, r));
+    assert.equal(setBasic.success, true);
+    assert.equal(setBasic.gameMode, 'basic');
+    assert.equal(setBasic.targetVictoryPoints, 10);
+    assert.equal(setBasic.room.gameMode, 'basic');
+    assert.equal(setBasic.room.targetVictoryPoints, 10);
+  });
+
   // Teardown
   if (client1) client1.disconnect();
   if (client2) client2.disconnect();
